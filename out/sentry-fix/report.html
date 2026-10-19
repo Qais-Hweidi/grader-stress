@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grader stress test</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0a0a'/%3E%3Cpath d='M16 5.5l8.5 3.2v6.6c0 5.3-3.6 9.3-8.5 11.4-4.9-2.1-8.5-6.1-8.5-11.4V8.7z' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='15.6' r='3.4' fill='%23f2731b'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fafafa; --card: #fff; --fg: #0a0a0a; --fg2: #3f3f3f; --muted: #6f6f6f; --faint: #9a9a9a;
+  --line: #e5e5e5; --line2: #d6d6d6; --tint: rgba(0,0,0,.04); --tint2: rgba(0,0,0,.06);
+  --blue: #2f7cf6; --green: #16a34a; --orange: #f2731b; --red: #e5484d; --amber: #c99a0c; --purple: #8b5cf6; --teal: #14b8a6;
+  --mint: linear-gradient(180deg, #dcf2e4 0%, #eef8f2 100%);
+  --rose: linear-gradient(180deg, #fbe1e4 0%, #fdf1f2 100%);
+  --peach: linear-gradient(180deg, #fde4d2 0%, #fff4ec 100%);
+  --lav: linear-gradient(180deg, #d9e3fb 0%, #eef2fd 100%);
+  --serif: "farnham-headline", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: "neue-haas-grotesk-text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --w: 1200px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+code, pre, .mono { font-family: var(--mono); }
+
+/* nav */
+.nav { position: sticky; top: 0; z-index: 20; height: 64px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 48px; background: rgba(250,250,250,.82); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+.brand { font: 700 21px/1 var(--serif); letter-spacing: -.03em; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.brand small { font: 500 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 8px; }
+.nav-links { display: flex; gap: 30px; font-size: 14px; font-weight: 500; color: var(--fg2); }
+.nav-links a { text-decoration: none; }
+.nav-links a:hover { color: var(--fg); }
+.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 8px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.btn-dark { background: #111; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1px 2px rgba(0,0,0,.2); }
+.btn-dark:hover { background: #262626; }
+.btn-light { background: #fff; color: #111; }
+.btn-ghost { background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.14); }
+.chip-cmd { display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 8px;
+  background: rgba(255,255,255,.7); border: 1px solid var(--line); font: 13px var(--mono); color: var(--fg2); }
+.chip-cmd .dollar { color: var(--faint); }
+.chip-cmd button { color: var(--faint); display: grid; place-items: center; }
+.chip-cmd button:hover { color: var(--fg); }
+
+/* frames with + markers */
+.frame { position: relative; max-width: var(--w); margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.frame.top { border-top: 1px solid var(--line); }
+.plus { position: absolute; width: 13px; height: 13px; pointer-events: none; z-index: 2; }
+.plus::before, .plus::after { content: ""; position: absolute; background: #b9b9b9; }
+.plus::before { left: 6px; top: 0; width: 1px; height: 13px; }
+.plus::after { top: 6px; left: 0; height: 1px; width: 13px; }
+.plus.tl { left: -7px; top: -7px; } .plus.tr { right: -7px; top: -7px; }
+.plus.bl { left: -7px; bottom: -7px; } .plus.br { right: -7px; bottom: -7px; }
+
+/* hero */
+.hero { position: relative; overflow: hidden; min-height: calc(100vh - 64px); display: flex; flex-direction: column; justify-content: center; background: linear-gradient(180deg, #edf1f4 0%, #e4eaee 48%, #eef1f3 78%, var(--bg) 100%); }
+.hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background: radial-gradient(1200px 400px at 50% 115%, rgba(255,255,255,.9), transparent 70%),
+              radial-gradient(600px 300px at 15% 20%, rgba(255,255,255,.55), transparent 70%); }
+.hero-inner { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 56px 24px; text-align: center; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--fg2); background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); padding: 7px 10px; border-radius: 999px; margin-bottom: 22px; }
+.eyebrow i { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 3px rgba(242,115,27,.18); }
+h1 { font: 700 68px/1.0 var(--serif); letter-spacing: -.035em; margin: 0; text-wrap: balance; }
+h1 em { font-style: normal; background: linear-gradient(rgba(242,115,27,.28), rgba(242,115,27,.28)) 0 88% / 100% .16em no-repeat; }
+.lede { max-width: 640px; margin: 22px auto 0; font-size: 16px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+.cta-row { display: flex; gap: 10px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
+
+/* section heads */
+.sec-head { text-align: center; padding: 88px 24px 40px; }
+.sec-head h2 { font: 700 44px/1.05 var(--serif); letter-spacing: -.03em; margin: 0; text-wrap: balance; }
+.sec-head p { margin: 14px auto 0; max-width: 620px; color: var(--muted); font-size: 15px; text-wrap: pretty; }
+.cap { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+
+/* method grid */
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.step { padding: 28px 24px 26px; min-height: 340px; display: flex; flex-direction: column; }
+.step + .step { border-left: 1px solid var(--line); }
+.step:nth-child(1) { background: var(--mint); } .step:nth-child(2) { background: var(--rose); }
+.step:nth-child(3) { background: var(--peach); } .step:nth-child(4) { background: var(--lav); }
+.step h3 { margin: 12px 0 8px; font: 500 21px/1.15 var(--sans); letter-spacing: -.02em; }
+.step p { margin: 0; font-size: 13.5px; color: var(--fg2); opacity: .85; }
+.mini { margin-top: auto; background: #fff; border: 1px solid rgba(0,0,0,.07); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(0,0,0,.12); font-size: 12px; }
+.mini .r { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.mini .r + .r { border-top: 1px dashed var(--line); }
+.mini .r .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini code { font-size: 11.5px; }
+
+/* pills + icons */
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  border: 1px solid transparent; white-space: nowrap; }
+.pill svg { width: 12px; height: 12px; }
+.p-survived { color: #b4520d; background: #fff1e6; border-color: #fbd7bb; }
+.p-caught { color: #15803d; background: #ecfaf1; border-color: #c6ebd3; }
+.p-broken { color: var(--muted); background: #f3f3f3; border-color: var(--line); }
+.p-verified { color: #1d5fd1; background: #eef4ff; border-color: #c9dbfd; }
+.p-revision { color: #b4520d; background: #fff1e6; border-color: #fbd7bb; }
+.p-invalid { color: #b42318; background: #fdecec; border-color: #f6c9c9; }
+.p-required { color: #15803d; background: #ecfaf1; border-color: #c6ebd3; }
+.p-implied { color: #1d5fd1; background: #eef4ff; border-color: #c9dbfd; }
+.p-ambiguous { color: #8a6a05; background: #fdf6dc; border-color: #f1e1a6; }
+.ico { width: 16px; height: 16px; flex: none; }
+
+/* review app */
+.app-wrap { padding: 0 0 0; background: var(--lav); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.app-wrap .intro { padding: 30px 32px 22px; }
+.app-wrap .intro h3 { margin: 0; font: 500 22px/1.2 var(--sans); letter-spacing: -.02em; }
+.app-wrap .intro p { margin: 6px 0 0; font-size: 14px; color: var(--fg2); opacity: .8; }
+.app { display: grid; grid-template-columns: 300px 1fr; margin: 0 32px; background: #fff; border: 1px solid rgba(0,0,0,.08);
+  border-bottom: 0; border-radius: 12px 12px 0 0; min-height: 640px; box-shadow: 0 -1px 0 rgba(255,255,255,.6), 0 20px 50px -30px rgba(30,50,110,.35); }
+.side { border-right: 1px solid var(--line); padding: 16px 12px; }
+.side .hd { display: flex; align-items: center; gap: 6px; padding: 4px 8px 12px; font-size: 12px; color: var(--muted); }
+.side .hd b { color: var(--red); font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+.trow { width: 100%; display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; text-align: left;
+  padding: 9px 10px; border-radius: 8px; border: 1px solid transparent; font-size: 13.5px; }
+.trow:hover { background: var(--tint); }
+.trow.on { background: #f4f7ff; border-color: #c9dbfd; }
+.trow .nm { font-weight: 500; }
+.trow .sub { display: block; font-size: 11.5px; color: var(--faint); font-weight: 400; margin-top: 1px; }
+.dots { display: flex; gap: 3px; margin-top: 6px; }
+.dots i { width: 7px; height: 7px; border-radius: 2px; background: #cdeed8; }
+.dots i.s { background: var(--orange); } .dots i.j { background: #e8c25a; } .dots i.x { background: #e3e3e3; }
+.tcount { font: 500 12px var(--mono); color: var(--muted); }
+.trow.on .tcount { color: var(--fg); }
+.side .legend { margin: 18px 10px 0; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 7px; font-size: 12px; color: var(--muted); }
+.side .legend span { display: flex; align-items: center; gap: 8px; }
+.side .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+.main { padding: 18px 22px 28px; min-width: 0; }
+.mhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mhead h4 { margin: 0; font: 500 16px/1.2 var(--sans); letter-spacing: -.01em; }
+.mhead .v { color: var(--faint); font-weight: 400; }
+.mhead .sp { flex: 1; }
+.prompt { margin: 14px 0 0; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+.prompt .who { font-size: 13px; font-weight: 500; }
+.prompt .txt { font-size: 13px; color: var(--fg2); white-space: pre-line; margin-top: 2px; }
+.prompt .txt.clip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.prompt .more { font-size: 12px; color: var(--blue); margin-top: 6px; }
+.av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 600 10px/1 var(--sans); flex: none; }
+.bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; margin: 18px 0 6px; background: var(--tint); gap: 2px; }
+.bar i { flex: 1; background: #bfe8cd; }
+.bar i.s { background: var(--orange); } .bar i.j { background: #e8c25a; } .bar i.x { background: #e3e3e3; }
+.barlbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+.mlist { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.mrow { width: 100%; display: grid; grid-template-columns: 34px 18px 1fr auto 16px; align-items: center; gap: 10px; padding: 11px 14px; text-align: left; font-size: 13.5px; }
+.mrow + .mrow, .mdetail + .mrow { border-top: 1px solid var(--line); }
+.mrow:hover { background: #fcfcfc; }
+.mrow .id { font: 12px var(--mono); color: var(--faint); }
+.mrow .ti { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow .chev { color: var(--faint); transition: transform .2s; }
+.mrow.open .chev { transform: rotate(90deg); }
+.mrow.surv .ti { font-weight: 500; }
+.mdetail { display: none; border-top: 1px solid var(--line); background: #fcfcfc; padding: 16px 16px 18px; }
+.mdetail.open { display: block; animation: rise .25s ease; }
+@keyframes rise { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv > div { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.kv .cap { display: block; margin-bottom: 6px; }
+.kv p { margin: 0; font-size: 13px; color: var(--fg2); }
+.spec .pill { justify-self: start; }
+.spec { margin-top: 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.spec blockquote { margin: 0; padding-left: 10px; border-left: 2px solid var(--line2); font-size: 13px; color: var(--fg2); }
+
+.split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+.tabs { display: flex; gap: 2px; padding: 3px; background: var(--tint); border-radius: 8px; width: fit-content; margin-bottom: 8px; }
+.tabs button { height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.tabs button.on { background: #fff; color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.codebox { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: auto; max-height: 460px; }
+.code { margin: 0; font: 12px/1.6 var(--mono); padding: 10px 0; min-width: max-content; }
+.code .ln { display: grid; grid-template-columns: 34px 34px 16px 1fr; padding-right: 14px; }
+.code.plain .ln { grid-template-columns: 38px 1fr; }
+.code .n { color: #b5b5b5; text-align: right; padding-right: 8px; user-select: none; }
+.code .g { color: #b5b5b5; user-select: none; }
+.code .add { background: #ecfaf1; } .code .add .g { color: var(--green); }
+.code .del { background: #fdeeee; } .code .del .g { color: var(--red); }
+.code .hunk { color: #8a8fb3; background: #f6f7fc; }
+.code .file { color: var(--fg2); font-weight: 600; background: #f7f7f7; border-bottom: 1px solid var(--line); margin-top: -10px; margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
+.tk-k { color: #c2410c; } .tk-s { color: #15803d; } .tk-c { color: #9a9a9a; font-style: italic; } .tk-n { color: #7c3aed; } .tk-d { color: #2563eb; } .tk-f { color: #1d4ed8; }
+
+.feed { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px 6px; }
+.feed .cap { display: block; padding: 6px 0 8px; }
+.ev { position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 7px 0 9px; font-size: 13px; }
+.ev:not(:last-child)::after { content: ""; position: absolute; left: 10.5px; top: 30px; bottom: -6px; width: 1px; background: var(--line); }
+.ev .who { font-weight: 500; }
+.ev .what { color: var(--fg2); }
+.ev .sub { display: block; font: 11.5px/1.45 var(--mono); color: var(--faint); margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+.ev .badge { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); }
+.tail { margin-top: 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 11.5px/1.5 var(--mono); color: var(--fg2); white-space: pre-wrap; max-height: 220px; overflow: auto; }
+
+/* fit */
+.flow { display: flex; align-items: stretch; justify-content: center; gap: 0; padding: 40px 32px 34px; border-top: 1px solid var(--line); flex-wrap: wrap; row-gap: 16px; }
+.node { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 150px; text-align: center; font-size: 13px; color: var(--fg2); }
+.node .bx { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.node.us .bx { background: #111; border-color: #111; color: #fff; box-shadow: 0 0 0 6px rgba(242,115,27,.15); }
+.node.qa .bx { border-color: #c9dbfd; background: #eef4ff; }
+.node b { font-weight: 500; color: var(--fg); }
+.arrow { width: 40px; height: 46px; display: grid; place-items: center; color: var(--line2); }
+.compare { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.compare > div { padding: 30px 32px 34px; }
+.compare > div + div { border-left: 1px solid var(--line); }
+.compare > div:first-child { background: var(--peach); }
+.compare > div:last-child { background: var(--lav); }
+.compare h3 { margin: 10px 0 12px; font: 500 21px/1.2 var(--sans); letter-spacing: -.02em; }
+.compare ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; font-size: 14px; color: var(--fg2); }
+.compare li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; }
+.note { padding: 18px 32px 22px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); text-align: center; }
+
+/* dark band */
+.dark { background: #0a0a0a; color: #fff; margin-top: 88px; }
+.dark .frame { border-color: #262626; }
+.dark .plus::before, .dark .plus::after { background: #444; }
+.dark-cta { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; padding: 72px 48px 56px; flex-wrap: wrap; }
+.dark-cta h2 { margin: 0; font: 500 38px/1.1 var(--sans); letter-spacing: -.03em; max-width: 560px; }
+.dark-cta p { margin: 12px 0 0; color: #9a9a9a; font-size: 14px; }
+.dark .chip-cmd { background: #161616; border-color: #2a2a2a; color: #d4d4d4; }
+.meta { display: grid; grid-template-columns: repeat(6, 1fr); border-top: 1px solid #262626; }
+.meta > div { padding: 20px 24px 24px; }
+.meta > div + div { border-left: 1px solid #262626; }
+.meta .cap { color: #6f6f6f; display: block; margin-bottom: 9px; }
+.meta .val { font-size: 14px; color: #e5e5e5; word-break: break-word; }
+.foot { display: flex; justify-content: space-between; padding: 22px 48px 34px; color: #6f6f6f; font-size: 12.5px; border-top: 1px solid #262626; flex-wrap: wrap; gap: 8px; }
+.foot a { text-decoration: none; color: #9a9a9a; }
+
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; background: #111; color: #fff; font-size: 13px;
+  padding: 9px 14px; border-radius: 8px; transition: all .25s; pointer-events: none; z-index: 50; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 960px) {
+  .nav { padding: 0 20px; } .nav-links { display: none; }
+  h1 { font-size: 44px; } .sec-head h2 { font-size: 34px; }
+  .steps { grid-template-columns: 1fr 1fr; }
+  .step:nth-child(3) { border-left: 0; } .step { border-top: 1px solid var(--line); }
+  .app { grid-template-columns: 1fr; margin: 0 12px; } .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .split, .kv, .compare { grid-template-columns: 1fr; } .compare > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .meta { grid-template-columns: 1fr 1fr; } .meta > div:nth-child(odd) { border-left: 0; }
+}
+
+/* simplified report */
+.app.solo { grid-template-columns: 1fr; } .app.solo .side { display: none; }
+.legend-row { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.legend-row span { display: inline-flex; align-items: center; gap: 6px; }
+.legend-row i { width: 9px; height: 9px; border-radius: 2px; background: #bfe8cd; display: inline-block; }
+.legend-row i.s { background: var(--orange); } .legend-row i.j { background: #e8c25a; }
+.catch { margin-top: 10px; display: grid; grid-template-columns: 18px 1fr; gap: 10px; background: #fff; border: 1px solid #c6ebd3; border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+.catch b { font-weight: 500; } .muted { color: var(--muted); }
+.kvl { display: grid; grid-template-columns: 52px 1fr; gap: 8px; margin-top: 6px; font-size: 12.5px; }
+.kvl span { color: var(--faint); } .kvl code { font-size: 12px; color: var(--fg2); word-break: break-word; }
+.nsub { font-size: 12px; color: var(--faint); }
+.meta { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 960px) { .meta { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="#top">grader stress test</a>
+  <div class="nav-links"><a href="#method">How it works</a><a href="#tasks">What it found</a><a href="#fit">Where it fits</a><a href="#run">Run it</a></div>
+  <button class="btn btn-dark" data-copy="cmd"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 3.5l9 4.5-9 4.5v-9z" fill="currentColor"/></svg>Copy run command</button>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-inner">
+    <span class="eyebrow"><i></i>Proof of concept</span>
+    <h1>Catch grader holes before the first AI&nbsp;run</h1>
+    <p class="lede">A grader gives an AI's fix a 1 or a 0. If its tests miss something, a wrong fix gets full marks, and that becomes bad training data. This tool writes wrong fixes on purpose, grades each one with the task's own tests, and writes a new test for any that slip through.</p>
+    <div class="cta-row">
+      <a class="btn btn-dark" href="#tasks" id="see">See it on a sample task <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <span class="chip-cmd"><span class="dollar">$</span><span id="cmd-short"></span><button data-copy="cmd" title="Copy"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.5V3A1.5 1.5 0 009 1.5H3.5A1.5 1.5 0 002 3v5.5A1.5 1.5 0 003.5 10h.5" stroke="currentColor" stroke-width="1.3"/></svg></button></span>
+    </div>
+  </div>
+</header>
+
+<section id="method">
+  <div class="sec-head"><span class="cap">How it works</span><h2>Wrong answers, on purpose</h2>
+    <p>A grader is only as good as the wrong answers it rejects. So we write some, and grade them exactly the way HUD grades an AI.</p></div>
+  <div class="frame"><span class="plus tl"></span><span class="plus tr"></span><span class="plus bl"></span><span class="plus br"></span>
+    <div class="steps" id="steps"></div>
+  </div>
+</section>
+
+<section id="tasks">
+  <div class="sec-head"><span class="cap">What it found</span><h2>Every wrong fix, graded</h2>
+    <p>Green: HUD's tests caught it. Orange: a hole, because a wrong fix got full marks. Yellow: unclear, because the task doesn't say what's right.</p></div>
+  <div class="frame"><span class="plus tl"></span><span class="plus tr"></span><span class="plus bl"></span><span class="plus br"></span>
+    <div class="app-wrap">
+      <div class="intro"><h3>Review the grader</h3><p>Click a row to see the wrong fix. Holes also show the new test that catches them, and the run that proves it.</p></div>
+      <div class="app" id="app">
+        <aside class="side" id="side"></aside>
+        <div class="main" id="main"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="fit">
+  <div class="sec-head"><span class="cap">Where it fits</span><h2>One check before the first AI run</h2>
+    <p>HUD's QA agents review an AI's work after a run. This checks the grader before any AI runs, and hands back the missing test.</p></div>
+  <div class="frame"><span class="plus tl"></span><span class="plus tr"></span><span class="plus bl"></span><span class="plus br"></span>
+    <div class="flow" id="flow"></div>
+    <div class="compare">
+      <div>
+        <span class="cap">Before any run · this tool</span>
+        <h3>Grader stress test</h3>
+        <ul>
+          <li><span>→</span><span>Needs only the task itself: no AI runs, no traces.</span></li>
+          <li><span>→</span><span>Tries wrong fixes on purpose to find the holes.</span></li>
+          <li><span>→</span><span>Hands back a new test for each hole, already proven to work.</span></li>
+        </ul>
+      </div>
+      <div>
+        <span class="cap">After a run · HUD QA agents</span>
+        <h3>False-positive detectors</h3>
+        <ul>
+          <li><span>→</span><span>Review real AI runs and judge whether full marks were earned.</span></li>
+          <li><span>→</span><span>Only see the mistakes the AI in that run happened to make.</span></li>
+          <li><span>→</span><span>Report evidence and a root cause for each issue.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dark" id="run">
+  <div class="frame"><span class="plus tl"></span><span class="plus tr"></span>
+    <div class="dark-cta">
+      <div><h2>Run it on a HUD coding task</h2><p>Point it at a repo with <code>{task}_baseline</code>, <code>_test</code> and <code>_golden</code> branches.</p></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="chip-cmd"><span class="dollar">$</span><span id="cmd-full"></span></span>
+        <button class="btn btn-light" data-copy="cmd">Copy command</button>
+      </div>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div class="foot"><span id="foot-l"></span><span>Built on <a href="https://github.com/hud-evals/coding-template">hud-evals/coding-template</a></span></div>
+  </div>
+</section>
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const REPORT = {
+  "meta": {
+    "repo": "https://github.com/hud-evals/coding-template-sample",
+    "model": "anthropic/claude-sonnet-5.5",
+    "mutants": 8,
+    "date": "2026-10-14"
+  },
+  "tasks": [
+    {
+      "slug": "sentry-fix",
+      "task_id": "sentry_fix",
+      "test_files": [
+        "test_user_service.py"
+      ],
+      "description": "Fix a crash in the user profile endpoint.\n\nThe user profile service crashes with a KeyError for certain users. Some users\nhave incomplete profile data \u2014 their `profile` field may be None or missing\nentirely. The service works fine for users with complete profiles but fails for\nothers. Investigate and fix the error handling in the user service.\n\nExpected behavior when a user has no profile (the `profile` field is None or\nabsent): fall back to the user's top-level `name` for the display name and use an\nempty string for the bio. Users with a complete profile keep their existing\n`display_name` and `bio`.",
+      "golden_diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..d104ab6 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"Unknown\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 5,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Only handle None profile",
+          "plausible": "The description mentions None first, and the sample data suggests a None profile is the crash case; an agent could handle `is None` using a direct key lookup on user.",
+          "difference": "For user 4 (no `profile` key), `user[\"profile\"]` still raises KeyError, whereas the reference falls back to the name.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    if user[\"profile\"] is None:\n        return {\n            \"name\": user[\"name\"],\n            \"email\": user[\"email\"],\n            \"bio\": \"\",\n        }\n\n    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..f0a8e24 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,6 +32,13 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    if user[\"profile\"] is None:\n+        return {\n+            \"name\": user[\"name\"],\n+            \"email\": user[\"email\"],\n+            \"bio\": \"\",\n+        }\n+\n     return {\n         \"name\": user[\"profile\"][\"display_name\"],\n         \"email\": user[\"email\"],\n",
+          "hidden": "fail",
+          "hidden_tail": "        Args:\n            user_id: The user ID to look up.\n            users_db: Optional user database dict. Defaults to USERS_DB.\n    \n        Returns:\n            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n>       if user[\"profile\"] is None:\n           ^^^^^^^^^^^^^^^\nE       KeyError: 'profile'\n\nuser_service.py:35: KeyError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m2",
+          "title": "Fallback name is empty string",
+          "plausible": "An agent might pick empty strings as safe defaults for every missing field, ignoring the instruction to fall back to the top-level name.",
+          "difference": "For Charlie (profile None), name is \"\" instead of \"Charlie\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", \"\"),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..1e1d39e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", \"\"),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\nE       AssertionError: assert '' == 'Bob'\nE         \nE         - Bob\n\ntest_user_service.py:23: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = \u003ctest_user_service.TestGetUserProfile object at 0x108c3c1a0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\nE       AssertionError: assert '' == 'Charlie'\nE         \nE         - Charlie\n\ntest_user_service.py:29: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m3",
+          "title": "Bio falls back to None",
+          "plausible": "Using a plain `.get` for the bio looks natural, but it returns None rather than the required empty string.",
+          "difference": "For a user with no profile, bio is None instead of \"\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..e529ba8 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n        assert result[\"name\"] == \"Bob\"\n        assert result[\"email\"] == \"bob@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:25: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = \u003ctest_user_service.TestGetUserProfile object at 0x1072d93d0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n        assert result[\"name\"] == \"Charlie\"\n        assert result[\"email\"] == \"charlie@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:31: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m4",
+          "title": "Return None for missing profile",
+          "plausible": "An agent might treat an incomplete profile as \"no profile data\" and return early rather than building the fallback dict.",
+          "difference": "For users without a profile, the function returns None instead of a dict with name, email and bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if not profile:\n        return None\n\n    return {\n        \"name\": profile[\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile[\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..c18ede0 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,14 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if not profile:\n+        return None\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile[\"display_name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile[\"bio\"],\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\nself = \u003ctest_user_service.TestGetUserProfile object at 0x10b4ef9e0>\n\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:23: TypeError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = \u003ctest_user_service.TestGetUserProfile object at 0x10b508860>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:29: TypeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m5",
+          "title": "Catch KeyError and TypeError broadly",
+          "plausible": "A quick fix wraps the access in try/except and falls back, which seems to cover all the crash cases.",
+          "difference": "For a profile dict that has display_name but lacks bio, the whole result falls back to the top-level name instead of keeping the existing display_name with an empty bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    try:\n        name = user[\"profile\"][\"display_name\"]\n        bio = user[\"profile\"][\"bio\"]\n    except (KeyError, TypeError):\n        name = user[\"name\"]\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user[\"email\"],\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..01f3d6e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,17 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    try:\n+        name = user[\"profile\"][\"display_name\"]\n+        bio = user[\"profile\"][\"bio\"]\n+    except (KeyError, TypeError):\n+        name = user[\"name\"]\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "\"Expected behavior when a user has no profile (the `profile` field is None or absent): fall back to the user's top-level `name`...\" The fallback is tied to the profile being None or absent. A profile that has `display_name` but no `bio` is neither, so the description implies `display_name` is kept. It never states the missing-`bio` case outright.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\nDB = {\n    \"1\": {\n        \"name\": \"Delilah\",\n        \"email\": \"d@example.com\",\n        \"profile\": {\"display_name\": \"Dee\"},\n    },\n}\n\n\ndef test_partial_profile_keeps_display_name_with_empty_bio():\n    result = get_user_profile(\"1\", DB)\n    assert result[\"name\"] == \"Dee\"\n    assert result[\"bio\"] == \"\"\n    assert result[\"email\"] == \"d@example.com\"",
+            "on_baseline": "fail",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____________ test_partial_profile_keeps_display_name_with_empty_bio ____________\n\n    def test_partial_profile_keeps_display_name_with_empty_bio():\n        result = get_user_profile(\"1\", DB)\n>       assert result[\"name\"] == \"Dee\"\nE       AssertionError: assert 'Delilah' == 'Dee'\nE         \nE         - Dee\nE         + Delilah\n\ntest_gst_killer.py:16: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_partial_profile_keeps_display_name_with_empty_bio\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m6",
+          "title": "Fix applied to list_users instead",
+          "plausible": "The agent edits list_users (also in the service) to be defensive and leaves get_user_profile partly fixed, handling only the missing-key case.",
+          "difference": "For Charlie (profile None), `user.get(\"profile\", {})` returns None and `.get` on it raises AttributeError, whereas the reference returns the fallback.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\", {})\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..de4b83f 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\", {})\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n        profile = user.get(\"profile\", {})\n        return {\n>           \"name\": profile.get(\"display_name\", user[\"name\"]),\n                    ^^^^^^^^^^^\n            \"email\": user[\"email\"],\n            \"bio\": profile.get(\"bio\", \"\"),\n        }\nE       AttributeError: 'NoneType' object has no attribute 'get'\n\nuser_service.py:37: AttributeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m7",
+          "title": "Always use top-level name",
+          "plausible": "The agent simplifies by always using the top-level name, which removes the crash path but changes what complete profiles return.",
+          "difference": "For Alice (complete profile), name is \"Alice\" instead of \"Alice A.\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": user[\"name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..76b21f2 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": user[\"name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "F....                                                                    [100%]\n=================================== FAILURES ===================================\n__________________ TestGetUserProfile.test_user_with_profile ___________________\n\nself = \u003ctest_user_service.TestGetUserProfile object at 0x10ad2c200>\n\n    def test_user_with_profile(self):\n        result = get_user_profile(\"1\", TEST_DB)\n>       assert result[\"name\"] == \"Alice A.\"\nE       AssertionError: assert 'Alice' == 'Alice A.'\nE         \nE         - Alice A.\nE         ?      ---\nE         + Alice\n\ntest_user_service.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_profile - Ass...\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m8",
+          "title": "Email lookup made safe too",
+          "plausible": "The agent over-defensively changes email to `.get`, so it also handles missing emails, and tests the fallback via truthiness.",
+          "difference": "For a user with no `email` key, this returns email None while the reference raises KeyError; it also uses \"\" as the name when `name` is missing.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if profile:\n        name = profile[\"display_name\"]\n        bio = profile.get(\"bio\", \"\")\n    else:\n        name = user.get(\"name\", \"\")\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user.get(\"email\"),\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..5cb9354 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n-        \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"name\": name,\n+        \"email\": user.get(\"email\"),\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description says nothing about users missing `email`, or about a missing top-level `name`. It only requires the fallback to `name` and an empty-string bio when `profile` is None or absent. The test asserts that a missing `email` still raises KeyError, which is the baseline behaviour, but the description does not require that.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\ndef test_missing_email_still_raises_keyerror_with_profile():\n    db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"1\", db)\n\n\ndef test_missing_email_still_raises_keyerror_without_profile():\n    db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"2\", db)",
+            "on_baseline": "fail",
+            "mutant_tail": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n____________ test_missing_email_still_raises_keyerror_with_profile _____________\n\n    def test_missing_email_still_raises_keyerror_with_profile():\n        db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:7: Failed\n___________ test_missing_email_still_raises_keyerror_without_profile ___________\n\n    def test_missing_email_still_raises_keyerror_without_profile():\n        db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:13: Failed\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_with_profile\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_without_profile\n2 failed in 0.01s"
+          }
+        }
+      ]
+    }
+  ]
+};
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const ICON = {
+  verified: '<svg class="ico" viewBox="0 0 16 16"><path fill="#2f7cf6" d="M8 .9l1.6 1.2 2-.1.6 1.9 1.7 1.1-.6 1.9.9 1.8-1.4 1.4-.2 2-1.9.5-1.1 1.7L8 14.2l-1.6 1-1.1-1.7-1.9-.5-.2-2L1.8 9.6l.9-1.8-.6-1.9 1.7-1.1.6-1.9 2 .1z"/><path d="M5.3 8.1l1.8 1.8 3.6-3.7" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  check: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8.2l2 2 4-4.2" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warn: '<svg class="ico" viewBox="0 0 16 16"><path d="M7.1 2.1a1 1 0 011.8 0l5.7 10.4a1 1 0 01-.9 1.5H2.3a1 1 0 01-.9-1.5z" fill="#f2731b"/><path d="M8 6v3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg>',
+  x: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#e5484d"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  dash: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#d4d4d4"/><path d="M5.2 8h5.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  q: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#e0b326"/><path d="M6.2 6.2a1.9 1.9 0 113 1.5c-.7.5-1.2.9-1.2 1.7" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".9" fill="#fff"/></svg>',
+  chev: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  arrow: '<svg width="28" height="12" viewBox="0 0 28 12" fill="none"><path d="M0 6h25M21 1.5L25.5 6 21 10.5" stroke="currentColor" stroke-width="1.3"/></svg>',
+  flame: '<svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1c1 3 4 4.2 4 8a4 4 0 01-8 0c0-2 1-3 2-4 0 1.4.6 2.3 1.4 2.6C7 5.8 7.4 3.2 8 1z" fill="currentColor"/></svg>',
+};
+const AV = { model: ["S", "#8b5cf6"], killer: ["T", "#2f7cf6"], prompt: ["P", "#14b8a6"] };
+const av = k => `<span class="av" style="background:${AV[k][1]}">${AV[k][0]}</span>`;
+
+const STATUS = {
+  gap: { cls: "p-survived", icon: ICON.warn, label: "Hole", dot: "s" },
+  judg: { cls: "p-ambiguous", icon: ICON.q, label: "Unclear", dot: "j" },
+  caught: { cls: "p-caught", icon: ICON.check, label: "Caught", dot: "" },
+  error: { cls: "p-broken", icon: ICON.dash, label: "Broken fix", dot: "x" },
+  invalid: { cls: "p-broken", icon: ICON.dash, label: "Didn't apply", dot: "x" },
+};
+const SPEC = {
+  required: ["p-required", "The task says so"],
+  implied: ["p-implied", "The task implies it"],
+  ambiguous: ["p-ambiguous", "The task doesn't say"],
+};
+
+/* ---------- python highlighting ---------- */
+const PY = /("""[\s\S]*?"""|'''[\s\S]*?'''|[rbfu]?"(?:\\.|[^"\\\n])*"|[rbfu]?'(?:\\.|[^'\\\n])*')|(#[^\n]*)|(@[\w.]+)|\b(def|class|return|if|elif|else|for|while|in|not|and|or|is|import|from|as|with|assert|raise|try|except|finally|lambda|yield|pass|break|continue|async|await|global|nonlocal|del)\b|\b(None|True|False|self|\d+(?:\.\d+)?)\b/g;
+function hl(src) {
+  let out = "", last = 0, m, prevDef = false;
+  const name = s => s.replace(/^(\s*)([A-Za-z_]\w*)/, '$1<span class="tk-f">$2</span>');
+  PY.lastIndex = 0;
+  while ((m = PY.exec(src))) {
+    const pre = esc(src.slice(last, m.index));
+    out += prevDef ? name(pre) : pre; prevDef = false;
+    const t = esc(m[0]);
+    if (m[1]) out += `<span class="tk-s">${t}</span>`;
+    else if (m[2]) out += `<span class="tk-c">${t}</span>`;
+    else if (m[3]) out += `<span class="tk-d">${t}</span>`;
+    else if (m[4]) { out += `<span class="tk-k">${t}</span>`; prevDef = m[4] === "def" || m[4] === "class"; }
+    else out += `<span class="tk-n">${t}</span>`;
+    last = PY.lastIndex;
+  }
+  const rest = esc(src.slice(last));
+  return out + (prevDef ? name(rest) : rest);
+}
+function codeView(src) {
+  const lines = hl(src.replace(/\n$/, "")).split("\n");
+  return `<pre class="code plain">${lines.map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span>${l || " "}</span></div>`).join("")}</pre>`;
+}
+function diffView(diff) {
+  let o = 0, n = 0; const rows = [];
+  for (const line of diff.replace(/\n$/, "").split("\n")) {
+    if (line.startsWith("diff --git")) { const f = (line.match(/ b\/(.+)$/) || [, ""])[1]; rows.push(`<div class="ln file"><span></span><span></span><span></span><span>${esc(f)}</span></div>`); continue; }
+    if (/^(index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(line)) continue;
+    const h = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
+    if (h) { o = +h[1]; n = +h[2]; rows.push(`<div class="ln hunk"><span class="n">…</span><span class="n">…</span><span></span><span>${esc(line)}</span></div>`); continue; }
+    const c = line[0], body = hl(line.slice(1)) || " ";
+    if (c === "+") rows.push(`<div class="ln add"><span class="n"></span><span class="n">${n++}</span><span class="g">+</span><span>${body}</span></div>`);
+    else if (c === "-") rows.push(`<div class="ln del"><span class="n">${o++}</span><span class="n"></span><span class="g">−</span><span>${body}</span></div>`);
+    else if (c === "\\") continue;
+    else rows.push(`<div class="ln"><span class="n">${o++}</span><span class="n">${n++}</span><span class="g"></span><span>${body}</span></div>`);
+  }
+  return `<pre class="code">${rows.join("")}</pre>`;
+}
+
+/* ---------- numbers ---------- */
+const tasks = REPORT.tasks, meta = REPORT.meta;
+const graded = t => (t.mutants || []).filter(m => m.hidden === "pass" || m.hidden === "fail");
+const surv = t => (t.mutants || []).filter(m => m.hidden === "pass");
+// A pass is a hole only when a verified new test pins behavior the task requires or implies;
+// otherwise the "wrong" fix may be a valid alternative and the task author should decide.
+const isGap = m => m.hidden === "pass" && m.killer && m.killer.verified && (m.killer.spec === "required" || m.killer.spec === "implied");
+const kind = m => m.hidden === "pass" ? (isGap(m) ? "gap" : "judg") : m.hidden === "fail" ? "caught" : m.hidden;
+const gaps = t => (t.mutants || []).filter(isGap);
+const judg = t => surv(t).filter(m => !isGap(m));
+const sum = f => tasks.reduce((a, t) => a + f(t).length, 0);
+const G = sum(graded);
+const solo = tasks.length === 1;
+const repoName = meta.repo.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
+const modelName = meta.model.split("/").pop().replace(/^claude-(\w)/, (_, c) => "Claude " + c.toUpperCase()).replace(/-(\d)\.(\d)$/, " $1.$2");
+const CMD = "uv run stress.py --tasks tasks.py";
+const CMD_FULL = `uv run stress.py --repo ${meta.repo} --tasks tasks.py${solo ? ` --only ${tasks[0].slug}` : ""}`;
+
+/* ---------- hero ---------- */
+$("#cmd-short").textContent = CMD;
+$("#cmd-full").textContent = CMD_FULL;
+
+/* ---------- how it works ---------- */
+const RAN = { pass: "passes", fail: "fails", error: "errors" };
+const firstGap = tasks.flatMap(t => gaps(t).map(m => ({ t, m })))[0] || tasks.flatMap(t => surv(t).map(m => ({ t, m })))[0];
+const sampleTitles = tasks.flatMap(t => (t.mutants || []).slice(0, solo ? 3 : 1)).slice(0, 3);
+$("#steps").innerHTML = [
+  { n: "01", h: "Check the task", p: "HUD's tests must fail on the buggy code and pass on the correct fix. Otherwise the task is broken before any AI sees it.",
+    mini: tasks.map(t => `<div class="r">${t.validity.valid ? ICON.check : ICON.x}<span class="t">${esc(t.slug)}</span><code style="color:var(--faint)">buggy ${RAN[t.validity.baseline]} · fix ${RAN[t.validity.golden]}</code></div>`).join("") },
+  { n: "02", h: "Write wrong fixes", p: `${esc(modelName)} reads the task and the correct fix, never HUD's tests, and writes believable wrong fixes.`,
+    mini: sampleTitles.map(m => `<div class="r">${av("model")}<span class="t">${esc(m.title)}</span></div>`).join("") },
+  { n: "03", h: "Grade them", p: "Run HUD's tests on each wrong fix, exactly the way HUD grades an AI. A wrong fix with full marks is a hole.",
+    mini: firstGap ? `<div class="r"><code class="t">$ pytest ${esc(firstGap.t.test_files.join(" "))}</code></div><div class="r">${ICON.warn}<span class="t"><b>${firstGap.m.id}</b>: all tests passed → full marks</span></div>` : G ? `<div class="r">${ICON.check}<span class="t">All wrong fixes got 0</span></div>` : `<div class="r">${ICON.dash}<span class="t">No wrong fixes graded</span></div>` },
+  { n: "04", h: "Close the hole", p: "Write a new test that passes on the correct fix and fails on the wrong one, then run both to prove it.",
+    mini: `<div class="r">${ICON.check}<span class="t">correct fix + new test</span><code style="color:var(--green)">pass</code></div><div class="r">${ICON.x}<span class="t">wrong fix + new test</span><code style="color:var(--red)">fail</code></div>` },
+].map(s => `<div class="step"><span class="cap">${s.n}</span><h3>${s.h}</h3><p>${s.p}</p><div class="mini">${s.mini}</div></div>`).join("");
+
+/* ---------- review ---------- */
+let current = (firstGap ? firstGap.t : tasks[0]).slug;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+const tested = t => !!(t.mutants && t.mutants.length);
+function taskBadge(t) {
+  if (t.error) return `<span class="pill p-invalid">${ICON.x}Error</span>`;
+  if (!t.validity.valid) return `<span class="pill p-invalid">${ICON.x}Broken task</span>`;
+  if (!tested(t)) return `<span class="pill p-broken">${ICON.dash}Not tested</span>`;
+  if (gaps(t).length) return `<span class="pill p-revision">${ICON.warn}${plural(gaps(t).length, "hole")}</span>`;
+  return judg(t).length ? `<span class="pill p-ambiguous">${ICON.q}Unclear</span>` : `<span class="pill p-verified">${ICON.verified}No holes</span>`;
+}
+function renderSide() {
+  if (solo) return;
+  $("#side").innerHTML = `<div class="hd">Tasks in <b>${ICON.flame} ${esc(repoName.split("/").pop())}</b></div>` +
+    tasks.map(t => {
+      const icon = t.error || !t.validity.valid ? ICON.x : !tested(t) ? ICON.dash : gaps(t).length ? ICON.warn : judg(t).length ? ICON.q : ICON.verified;
+      return `<button class="trow${t.slug === current ? " on" : ""}" data-task="${esc(t.slug)}">${icon}
+        <span><span class="nm">${esc(t.slug)}</span><span class="sub">${t.hidden_tests} HUD tests</span>
+        <span class="dots">${(t.mutants || []).map(m => `<i class="${STATUS[kind(m)].dot}"></i>`).join("")}</span></span>
+        <span class="tcount" title="holes">${plural(gaps(t).length, "hole")}</span></button>`;
+    }).join("");
+}
+
+function failCard(m) {
+  const lines = (m.hidden_tail || "").split("\n");
+  if (m.hidden !== "fail") return `<div class="tail">${esc(m.hidden_tail)}</div>`;
+  const failed = lines.filter(l => l.startsWith("FAILED ")).map(l => l.replace(/^FAILED\s+/, "").split(" - ")[0].split("::").pop());
+  const err = (lines.find(l => /^E\s+\S/.test(l)) || "").replace(/^E\s+/, "");
+  const total = (lines.slice().reverse().find(l => /\d+ (failed|passed)/.test(l)) || "").replace(/=/g, "").replace(/ in [\d.]+s.*$/, "").trim();
+  return `<div class="catch">${ICON.check}<div><b>HUD's tests gave it 0</b> <span class="muted">(${esc(total)})</span>
+    ${failed.length ? `<div class="kvl"><span>Failed</span><code>${failed.map(esc).join(", ")}</code></div>` : ""}
+    ${err ? `<div class="kvl"><span>Error</span><code>${esc(err)}</code></div>` : ""}</div></div>`;
+}
+
+function timeline(m) {
+  const k = m.killer || {};
+  const ev = [
+    [av("model"), `<span class="who">${esc(modelName)}</span> <span class="what">wrote this wrong fix</span>`],
+    [`<span class="badge">${ICON.warn}</span>`, `<span class="who">HUD's tests</span> <span class="what">all passed, so it got full marks</span>`],
+  ];
+  if (k.verified) {
+    ev.push([av("killer"), `<span class="who">New test</span> <span class="what">written</span>`]);
+    ev.push([`<span class="badge">${ICON.check}</span>`, `<span class="who">Correct fix + new test</span> <span class="what">passed</span>`]);
+    ev.push([`<span class="badge">${ICON.x}</span>`, `<span class="who">Wrong fix + new test</span> <span class="what">failed, so the hole is closed</span>`]);
+    if (k.on_baseline === "fail") ev.push([`<span class="badge">${ICON.verified}</span>`, `<span class="who">Original bug + new test</span> <span class="what">failed too</span>`]);
+  } else {
+    ev.push([`<span class="badge">${ICON.dash}</span>`, `<span class="who">New test</span> <span class="what">not found</span>`]);
+  }
+  if (!isGap(m)) ev.push([`<span class="badge">${ICON.q}</span>`, `<span class="who">Left to the task author</span> <span class="what">${k.verified ? "the task doesn't say what's right here" : esc(k.note || "no new test found")}</span>`]);
+  return `<div class="feed"><span class="cap">What happened</span>${ev.map(([b, h]) => `<div class="ev">${b}<div>${h}</div></div>`).join("")}</div>`;
+}
+
+function detail(t, m) {
+  if (m.hidden !== "pass") return `${m.diff ? `<div class="codebox">${diffView(m.diff)}</div>` : ""}${failCard(m)}`;
+  const k = m.killer || {};
+  const spec = k.verified && SPEC[k.spec] ? `<div class="spec"><span class="pill ${SPEC[k.spec][0]}">${SPEC[k.spec][1]}</span><blockquote>${esc(k.basis)}</blockquote></div>` : "";
+  const tabs = [];
+  if (k.verified) tabs.push(["killer", "New test", codeView(k.code)]);
+  tabs.push(["wrong", "Wrong fix", m.diff ? diffView(m.diff) : ""], ["golden", "Correct fix", diffView(t.golden_diff || "")]);
+  const id = `${t.slug}-${m.id}`;
+  return `<div class="kv"><div><span class="cap">Why it's tempting</span><p>${esc(m.plausible)}</p></div>
+      <div><span class="cap">What it gets wrong</span><p>${esc(m.difference)}</p></div></div>
+    ${spec}
+    <div class="split">
+      <div><div class="tabs" data-tabs="${esc(id)}">${tabs.map(([key, l], i) => `<button class="${i ? "" : "on"}" data-tab="${key}">${l}</button>`).join("")}</div>
+        ${tabs.map(([key, , html], i) => `<div class="codebox" data-pane="${esc(id)}:${key}" style="${i ? "display:none" : ""}">${html}</div>`).join("")}</div>
+      ${timeline(m)}
+    </div>`;
+}
+
+const openSet = new Set();
+function renderMain() {
+  const t = tasks.find(x => x.slug === current), ms = t.mutants || [];
+  $("#main").innerHTML = `
+    <div class="mhead"><h4>${esc(t.slug)} <span class="v">· ${t.hidden_tests} HUD tests</span></h4>${taskBadge(t)}</div>
+    ${t.error ? `<div class="tail">${esc(t.error)}</div>` : ""}
+    <div class="prompt">${av("prompt")}<div><div class="who">The task</div><div class="txt clip" id="ptxt">${esc(t.description)}</div><button class="more" id="pmore">Show the full task</button></div></div>
+    ${ms.length ? `<div class="bar">${ms.map(m => `<i class="${STATUS[kind(m)].dot}"></i>`).join("")}</div>
+    <div class="legend-row"><span><i></i>${graded(t).length - surv(t).length} caught</span><span><i class="s"></i>${plural(gaps(t).length, "hole")}</span><span><i class="j"></i>${judg(t).length} unclear</span></div>` : ""}
+    <div class="mlist">${ms.map(m => {
+      const st = STATUS[kind(m)], key = `${t.slug}:${m.id}`, open = openSet.has(key);
+      return `<button class="mrow${m.hidden === "pass" ? " surv" : ""}${open ? " open" : ""}" data-m="${esc(key)}">
+          <span class="id">${m.id}</span>${st.icon}<span class="ti">${esc(m.title)}</span><span class="pill ${st.cls}">${st.label}</span><span class="chev">${ICON.chev}</span></button>
+        <div class="mdetail${open ? " open" : ""}" data-md="${esc(key)}">${open ? detail(t, m) : ""}</div>`;
+    }).join("")}</div>`;
+}
+function render() { renderSide(); renderMain(); }
+
+document.addEventListener("click", e => {
+  const tr = e.target.closest("[data-task]");
+  if (tr) { current = tr.dataset.task; render(); return; }
+  const mr = e.target.closest("[data-m]");
+  if (mr) {
+    const key = mr.dataset.m, [slug, id] = key.split(":");
+    openSet.has(key) ? openSet.delete(key) : openSet.add(key);
+    const t = tasks.find(x => x.slug === slug), m = t.mutants.find(x => x.id === id);
+    const d = document.querySelector(`[data-md="${CSS.escape(key)}"]`);
+    mr.classList.toggle("open"); d.classList.toggle("open");
+    if (d.classList.contains("open")) d.innerHTML = detail(t, m);
+    return;
+  }
+  const tb = e.target.closest("[data-tab]");
+  if (tb) {
+    const group = tb.parentElement.dataset.tabs;
+    tb.parentElement.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb));
+    document.querySelectorAll(`[data-pane^="${CSS.escape(group)}:"]`).forEach(p => p.style.display = p.dataset.pane === `${group}:${tb.dataset.tab}` ? "" : "none");
+    return;
+  }
+  if (e.target.closest("#pmore")) { const p = $("#ptxt"); p.classList.toggle("clip"); e.target.textContent = p.classList.contains("clip") ? "Show the full task" : "Show less"; return; }
+  if (e.target.closest("[data-copy]")) { navigator.clipboard?.writeText(CMD_FULL); const t = $("#toast"); t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1400); return; }
+  if (e.target.closest("#see") && firstGap) { current = firstGap.t.slug; openSet.add(`${firstGap.t.slug}:${firstGap.m.id}`); render(); }
+});
+
+if (solo) $("#app").classList.add("solo");
+render();
+
+/* ---------- where it fits + meta ---------- */
+const nodes = [
+  ["Write the task", "bug + tests + fix", "", '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M3 13h10M4 10.5l6.5-6.5 2 2L6 12.5H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>'],
+  ["Grader stress test", "this tool · before any run", "us", '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4z" stroke="currentColor" stroke-width="1.3"/><path d="M5.6 8l1.7 1.7 3.2-3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
+  ["AI runs", "hud eval", "", '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l2 1.5L5 10M8.5 10H11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'],
+  ["HUD QA agents", "after a run", "qa", '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="#2f7cf6" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="#2f7cf6" stroke-width="1.4" stroke-linecap="round"/></svg>'],
+  ["Verified", "ready to ship", "", ICON.verified.replace('class="ico"', 'width="20" height="20"')],
+  ["DataVendor", "listed for AI labs", "", '<svg width="20" height="20" viewBox="0 0 16 16"><path d="M8 1.3l5.8 3.3v6.8L8 14.7l-5.8-3.3V4.6z" fill="#d4a90e"/><path d="M8 5v4" stroke="#111" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".9" fill="#111"/></svg>'],
+];
+$("#flow").innerHTML = nodes.map(([b, s, cls, ic], i) => `${i ? `<span class="arrow">${ICON.arrow}</span>` : ""}<div class="node ${cls}"><span class="bx">${ic}</span><b>${b}</b><span class="nsub">${s}</span></div>`).join("");
+
+$("#meta").innerHTML = [
+  ["Repo", repoName], [solo ? "Task" : "Tasks", tasks.map(t => t.slug).join(", ")], ["Model", modelName], ["Wrong fixes tried", G],
+].map(([k, v]) => `<div><span class="cap">${k}</span><div class="val">${esc(v)}</div></div>`).join("");
+$("#foot-l").textContent = `Qais Hweidi · ${meta.date || ""}`;
+</script>
+</body>
+</html>

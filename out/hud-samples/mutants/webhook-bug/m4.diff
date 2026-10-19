@@ -1,0 +1,21 @@
+diff --git a/services/notification_builder.py b/services/notification_builder.py
+index 36e7eea..1dcb50b 100644
+--- a/services/notification_builder.py
++++ b/services/notification_builder.py
+@@ -108,14 +108,14 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):
+     -------
+     dict or None
+     """
+-    channels = resolve_channels(event_type)
++    channels = list(resolve_channels(event_type))
+     priority = resolve_priority(event_type)
+ 
+     if channels is None:
+         return None
+ 
+     channels = _merge_extra_channels(channels, extra_channels)
+-    channels = _sort_channels_by_weight(channels)
++    channels = list(channels)
+ 
+     notification_id = _generate_notification_id(event_type, recipient)
+     metadata = _build_metadata(event_type, recipient, event_data, priority)

@@ -1,0 +1,13 @@
+diff --git a/database.py b/database.py
+index 4d43619..3d7538c 100644
+--- a/database.py
++++ b/database.py
+@@ -59,7 +59,7 @@ def get_user_settings(user_id: str) -> CompactDict | None:
+     user = _users.get(user_id)
+     if user is None:
+         return None
+-    return CompactDict(copy.deepcopy(user["settings"]))
++    return copy.deepcopy(user["settings"])
+ 
+ 
+ def update_user_settings(user_id: str, updates: dict) -> bool:

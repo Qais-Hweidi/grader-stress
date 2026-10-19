@@ -1,0 +1,13 @@
+diff --git a/services/notification_service.py b/services/notification_service.py
+index 62b09b0..0deb108 100644
+--- a/services/notification_service.py
++++ b/services/notification_service.py
+@@ -24,7 +24,7 @@ class NotificationService:
+             ("assigned", self._handle_task_assigned),
+             ("completed", self._handle_task_completed),
+         ]:
+-            self._handlers[f"task.{action}"] = handler
++            self._handlers[f"task_{action}"] = handler
+ 
+         # Legacy format kept for backwards compat (pre-refactor callers
+         # still emit "task_created" with underscore delimiter).

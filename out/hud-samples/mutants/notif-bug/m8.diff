@@ -1,0 +1,27 @@
+diff --git a/services/notification_service.py b/services/notification_service.py
+index 62b09b0..dec2b3c 100644
+--- a/services/notification_service.py
++++ b/services/notification_service.py
+@@ -28,7 +28,8 @@ class NotificationService:
+ 
+         # Legacy format kept for backwards compat (pre-refactor callers
+         # still emit "task_created" with underscore delimiter).
+-        self._handlers["task_created"] = self._handle_task_created
++        for action in ("created", "assigned", "completed"):
++            self._handlers[f"task_{action}"] = self._handlers[f"task.{action}"]
+ 
+     def handle_event(self, event: dict) -> None:
+         """Route an event to its registered handler, if any."""
+diff --git a/services/task_service.py b/services/task_service.py
+index a654248..4c1e792 100644
+--- a/services/task_service.py
++++ b/services/task_service.py
+@@ -9,7 +9,7 @@ from services import notification_service
+ def _create_event(category: str, action: str, data: dict) -> dict:
+     """Build a structured event payload."""
+     return {
+-        "type": f"{category}_{action}",
++        "type": f"{category}.{action}",
+         "timestamp": config.get_timestamp(),  # Updated in timezone refactor
+         "data": data,
+     }

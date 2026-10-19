@@ -1,0 +1,24 @@
+diff --git a/user_service.py b/user_service.py
+index f4ae026..01f3d6e 100644
+--- a/user_service.py
++++ b/user_service.py
+@@ -32,10 +32,17 @@ def get_user_profile(user_id, users_db=None):
+     if not user:
+         raise ValueError(f"User {user_id} not found")
+ 
++    try:
++        name = user["profile"]["display_name"]
++        bio = user["profile"]["bio"]
++    except (KeyError, TypeError):
++        name = user["name"]
++        bio = ""
++
+     return {
+-        "name": user["profile"]["display_name"],
++        "name": name,
+         "email": user["email"],
+-        "bio": user["profile"]["bio"],
++        "bio": bio,
+     }
+ 
+ 

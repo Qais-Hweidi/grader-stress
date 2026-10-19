@@ -1,0 +1,14 @@
+diff --git a/services/notification_service.py b/services/notification_service.py
+index 62b09b0..1fe6def 100644
+--- a/services/notification_service.py
++++ b/services/notification_service.py
+@@ -32,7 +32,8 @@ class NotificationService:
+ 
+     def handle_event(self, event: dict) -> None:
+         """Route an event to its registered handler, if any."""
+-        handler = self._handlers.get(event.get("type"))
++        etype = (event.get("type") or "").replace("_", ".", 1)
++        handler = self._handlers.get(etype)
+         if handler:
+             handler(event)
+ 

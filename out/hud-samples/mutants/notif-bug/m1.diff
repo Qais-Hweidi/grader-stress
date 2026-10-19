@@ -1,0 +1,13 @@
+diff --git a/services/notification_service.py b/services/notification_service.py
+index 62b09b0..4750b0a 100644
+--- a/services/notification_service.py
++++ b/services/notification_service.py
+@@ -29,6 +29,8 @@ class NotificationService:
+         # Legacy format kept for backwards compat (pre-refactor callers
+         # still emit "task_created" with underscore delimiter).
+         self._handlers["task_created"] = self._handle_task_created
++        self._handlers["task_assigned"] = self._handle_task_assigned
++        self._handlers["task_completed"] = self._handle_task_completed
+ 
+     def handle_event(self, event: dict) -> None:
+         """Route an event to its registered handler, if any."""

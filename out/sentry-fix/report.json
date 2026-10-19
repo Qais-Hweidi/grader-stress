@@ -1,0 +1,180 @@
+{
+  "meta": {
+    "repo": "https://github.com/hud-evals/coding-template-sample",
+    "model": "anthropic/claude-sonnet-5.5",
+    "mutants": 8,
+    "date": "2026-10-14"
+  },
+  "tasks": [
+    {
+      "slug": "sentry-fix",
+      "task_id": "sentry_fix",
+      "test_files": [
+        "test_user_service.py"
+      ],
+      "description": "Fix a crash in the user profile endpoint.\n\nThe user profile service crashes with a KeyError for certain users. Some users\nhave incomplete profile data \u2014 their `profile` field may be None or missing\nentirely. The service works fine for users with complete profiles but fails for\nothers. Investigate and fix the error handling in the user service.\n\nExpected behavior when a user has no profile (the `profile` field is None or\nabsent): fall back to the user's top-level `name` for the display name and use an\nempty string for the bio. Users with a complete profile keep their existing\n`display_name` and `bio`.",
+      "golden_diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..d104ab6 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"Unknown\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 5,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Only handle None profile",
+          "plausible": "The description mentions None first, and the sample data suggests a None profile is the crash case; an agent could handle `is None` using a direct key lookup on user.",
+          "difference": "For user 4 (no `profile` key), `user[\"profile\"]` still raises KeyError, whereas the reference falls back to the name.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    if user[\"profile\"] is None:\n        return {\n            \"name\": user[\"name\"],\n            \"email\": user[\"email\"],\n            \"bio\": \"\",\n        }\n\n    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..f0a8e24 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,6 +32,13 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    if user[\"profile\"] is None:\n+        return {\n+            \"name\": user[\"name\"],\n+            \"email\": user[\"email\"],\n+            \"bio\": \"\",\n+        }\n+\n     return {\n         \"name\": user[\"profile\"][\"display_name\"],\n         \"email\": user[\"email\"],\n",
+          "hidden": "fail",
+          "hidden_tail": "        Args:\n            user_id: The user ID to look up.\n            users_db: Optional user database dict. Defaults to USERS_DB.\n    \n        Returns:\n            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n>       if user[\"profile\"] is None:\n           ^^^^^^^^^^^^^^^\nE       KeyError: 'profile'\n\nuser_service.py:35: KeyError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m2",
+          "title": "Fallback name is empty string",
+          "plausible": "An agent might pick empty strings as safe defaults for every missing field, ignoring the instruction to fall back to the top-level name.",
+          "difference": "For Charlie (profile None), name is \"\" instead of \"Charlie\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", \"\"),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..1e1d39e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", \"\"),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\nE       AssertionError: assert '' == 'Bob'\nE         \nE         - Bob\n\ntest_user_service.py:23: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x108c3c1a0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\nE       AssertionError: assert '' == 'Charlie'\nE         \nE         - Charlie\n\ntest_user_service.py:29: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m3",
+          "title": "Bio falls back to None",
+          "plausible": "Using a plain `.get` for the bio looks natural, but it returns None rather than the required empty string.",
+          "difference": "For a user with no profile, bio is None instead of \"\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..e529ba8 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n        assert result[\"name\"] == \"Bob\"\n        assert result[\"email\"] == \"bob@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:25: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x1072d93d0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n        assert result[\"name\"] == \"Charlie\"\n        assert result[\"email\"] == \"charlie@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:31: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m4",
+          "title": "Return None for missing profile",
+          "plausible": "An agent might treat an incomplete profile as \"no profile data\" and return early rather than building the fallback dict.",
+          "difference": "For users without a profile, the function returns None instead of a dict with name, email and bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if not profile:\n        return None\n\n    return {\n        \"name\": profile[\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile[\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..c18ede0 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,14 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if not profile:\n+        return None\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile[\"display_name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile[\"bio\"],\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\nself = <test_user_service.TestGetUserProfile object at 0x10b4ef9e0>\n\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:23: TypeError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x10b508860>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:29: TypeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m5",
+          "title": "Catch KeyError and TypeError broadly",
+          "plausible": "A quick fix wraps the access in try/except and falls back, which seems to cover all the crash cases.",
+          "difference": "For a profile dict that has display_name but lacks bio, the whole result falls back to the top-level name instead of keeping the existing display_name with an empty bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    try:\n        name = user[\"profile\"][\"display_name\"]\n        bio = user[\"profile\"][\"bio\"]\n    except (KeyError, TypeError):\n        name = user[\"name\"]\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user[\"email\"],\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..01f3d6e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,17 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    try:\n+        name = user[\"profile\"][\"display_name\"]\n+        bio = user[\"profile\"][\"bio\"]\n+    except (KeyError, TypeError):\n+        name = user[\"name\"]\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "\"Expected behavior when a user has no profile (the `profile` field is None or absent): fall back to the user's top-level `name`...\" The fallback is tied to the profile being None or absent. A profile that has `display_name` but no `bio` is neither, so the description implies `display_name` is kept. It never states the missing-`bio` case outright.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\nDB = {\n    \"1\": {\n        \"name\": \"Delilah\",\n        \"email\": \"d@example.com\",\n        \"profile\": {\"display_name\": \"Dee\"},\n    },\n}\n\n\ndef test_partial_profile_keeps_display_name_with_empty_bio():\n    result = get_user_profile(\"1\", DB)\n    assert result[\"name\"] == \"Dee\"\n    assert result[\"bio\"] == \"\"\n    assert result[\"email\"] == \"d@example.com\"",
+            "on_baseline": "fail",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____________ test_partial_profile_keeps_display_name_with_empty_bio ____________\n\n    def test_partial_profile_keeps_display_name_with_empty_bio():\n        result = get_user_profile(\"1\", DB)\n>       assert result[\"name\"] == \"Dee\"\nE       AssertionError: assert 'Delilah' == 'Dee'\nE         \nE         - Dee\nE         + Delilah\n\ntest_gst_killer.py:16: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_partial_profile_keeps_display_name_with_empty_bio\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m6",
+          "title": "Fix applied to list_users instead",
+          "plausible": "The agent edits list_users (also in the service) to be defensive and leaves get_user_profile partly fixed, handling only the missing-key case.",
+          "difference": "For Charlie (profile None), `user.get(\"profile\", {})` returns None and `.get` on it raises AttributeError, whereas the reference returns the fallback.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\", {})\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..de4b83f 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\", {})\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n        profile = user.get(\"profile\", {})\n        return {\n>           \"name\": profile.get(\"display_name\", user[\"name\"]),\n                    ^^^^^^^^^^^\n            \"email\": user[\"email\"],\n            \"bio\": profile.get(\"bio\", \"\"),\n        }\nE       AttributeError: 'NoneType' object has no attribute 'get'\n\nuser_service.py:37: AttributeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m7",
+          "title": "Always use top-level name",
+          "plausible": "The agent simplifies by always using the top-level name, which removes the crash path but changes what complete profiles return.",
+          "difference": "For Alice (complete profile), name is \"Alice\" instead of \"Alice A.\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": user[\"name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..76b21f2 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": user[\"name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "F....                                                                    [100%]\n=================================== FAILURES ===================================\n__________________ TestGetUserProfile.test_user_with_profile ___________________\n\nself = <test_user_service.TestGetUserProfile object at 0x10ad2c200>\n\n    def test_user_with_profile(self):\n        result = get_user_profile(\"1\", TEST_DB)\n>       assert result[\"name\"] == \"Alice A.\"\nE       AssertionError: assert 'Alice' == 'Alice A.'\nE         \nE         - Alice A.\nE         ?      ---\nE         + Alice\n\ntest_user_service.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_profile - Ass...\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m8",
+          "title": "Email lookup made safe too",
+          "plausible": "The agent over-defensively changes email to `.get`, so it also handles missing emails, and tests the fallback via truthiness.",
+          "difference": "For a user with no `email` key, this returns email None while the reference raises KeyError; it also uses \"\" as the name when `name` is missing.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if profile:\n        name = profile[\"display_name\"]\n        bio = profile.get(\"bio\", \"\")\n    else:\n        name = user.get(\"name\", \"\")\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user.get(\"email\"),\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..5cb9354 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n-        \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"name\": name,\n+        \"email\": user.get(\"email\"),\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description says nothing about users missing `email`, or about a missing top-level `name`. It only requires the fallback to `name` and an empty-string bio when `profile` is None or absent. The test asserts that a missing `email` still raises KeyError, which is the baseline behaviour, but the description does not require that.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\ndef test_missing_email_still_raises_keyerror_with_profile():\n    db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"1\", db)\n\n\ndef test_missing_email_still_raises_keyerror_without_profile():\n    db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"2\", db)",
+            "on_baseline": "fail",
+            "mutant_tail": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n____________ test_missing_email_still_raises_keyerror_with_profile _____________\n\n    def test_missing_email_still_raises_keyerror_with_profile():\n        db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:7: Failed\n___________ test_missing_email_still_raises_keyerror_without_profile ___________\n\n    def test_missing_email_still_raises_keyerror_without_profile():\n        db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:13: Failed\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_with_profile\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_without_profile\n2 failed in 0.01s"
+          }
+        }
+      ]
+    }
+  ]
+}

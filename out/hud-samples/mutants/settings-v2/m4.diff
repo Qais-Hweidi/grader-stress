@@ -1,0 +1,22 @@
+diff --git a/utils/types.py b/utils/types.py
+index ce51793..bbe2a02 100644
+--- a/utils/types.py
++++ b/utils/types.py
+@@ -19,17 +19,7 @@ class CompactDict(dict):
+     by ``json.dumps`` and ``dict()`` so that API responses stay lean.
+     """
+ 
+-    def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]
+-        return [(k, v) for k, v in super().items() if v]
+ 
+-    def values(self) -> list[Any]:  # type: ignore[override]
+-        return [v for v in super().values() if v]
+-
+-    def __iter__(self) -> Iterator[str]:
+-        return iter(k for k, v in super().items() if v)
+-
+-    def __len__(self) -> int:
+-        return sum(1 for v in super().values() if v)
+ 
+     def __repr__(self) -> str:
+         filtered = {k: v for k, v in super().items() if v}

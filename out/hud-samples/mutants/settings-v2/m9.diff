@@ -1,0 +1,14 @@
+diff --git a/services/settings_service.py b/services/settings_service.py
+index dc44e16..9f4a9b0 100644
+--- a/services/settings_service.py
++++ b/services/settings_service.py
+@@ -20,7 +20,8 @@ def get_effective_settings(user_id: str) -> dict | None:
+         return None
+ 
+     effective = {**config.DEFAULT_SETTINGS}
+-    for key, value in custom.items():
++    for key in dict.keys(custom):
++        value = dict.__getitem__(custom, key)
+         if value is not None:
+             effective[key] = value
+ 

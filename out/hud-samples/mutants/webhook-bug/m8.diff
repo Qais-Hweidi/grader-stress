@@ -1,0 +1,30 @@
+diff --git a/services/notification_builder.py b/services/notification_builder.py
+index 36e7eea..c158cd3 100644
+--- a/services/notification_builder.py
++++ b/services/notification_builder.py
+@@ -4,7 +4,7 @@ import hashlib
+ import time
+ 
+ from services.channel_resolver import resolve_channels, resolve_priority
+-from config import CHANNEL_REGISTRY
++from config import CHANNEL_REGISTRY, CHANNEL_DEFAULTS
+ from utils.formatters import format_subject, format_body, truncate
+ 
+ 
+@@ -108,7 +108,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):
+     -------
+     dict or None
+     """
+-    channels = resolve_channels(event_type)
++    channels = list(resolve_channels(event_type))
+     priority = resolve_priority(event_type)
+ 
+     if channels is None:
+@@ -116,6 +116,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):
+ 
+     channels = _merge_extra_channels(channels, extra_channels)
+     channels = _sort_channels_by_weight(channels)
++    channels = channels[: max(len(CHANNEL_DEFAULTS.get(priority, ["email"])), 1)]
+ 
+     notification_id = _generate_notification_id(event_type, recipient)
+     metadata = _build_metadata(event_type, recipient, event_data, priority)

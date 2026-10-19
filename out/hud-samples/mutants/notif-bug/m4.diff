@@ -1,0 +1,13 @@
+diff --git a/services/task_service.py b/services/task_service.py
+index a654248..42c4d42 100644
+--- a/services/task_service.py
++++ b/services/task_service.py
+@@ -9,7 +9,7 @@ from services import notification_service
+ def _create_event(category: str, action: str, data: dict) -> dict:
+     """Build a structured event payload."""
+     return {
+-        "type": f"{category}_{action}",
++        "type": f"{category}_{action}" if action == "created" else f"{category}.{action}",
+         "timestamp": config.get_timestamp(),  # Updated in timezone refactor
+         "data": data,
+     }

@@ -1,0 +1,25 @@
+diff --git a/utils/types.py b/utils/types.py
+index ce51793..832c87e 100644
+--- a/utils/types.py
++++ b/utils/types.py
+@@ -20,16 +20,16 @@ class CompactDict(dict):
+     """
+ 
+     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]
+-        return [(k, v) for k, v in super().items() if v]
++        return [(k, v) for k, v in super().items() if v is not None]
+ 
+     def values(self) -> list[Any]:  # type: ignore[override]
+-        return [v for v in super().values() if v]
++        return [v for v in super().values() if v is not None]
+ 
+     def __iter__(self) -> Iterator[str]:
+-        return iter(k for k, v in super().items() if v)
++        return super().__iter__()
+ 
+     def __len__(self) -> int:
+-        return sum(1 for v in super().values() if v)
++        return super().__len__()
+ 
+     def __repr__(self) -> str:
+         filtered = {k: v for k, v in super().items() if v}

@@ -1,0 +1,15 @@
+diff --git a/services/notification_builder.py b/services/notification_builder.py
+index 36e7eea..b0d1408 100644
+--- a/services/notification_builder.py
++++ b/services/notification_builder.py
+@@ -89,9 +89,7 @@ def _merge_extra_channels(channels, extra_channels):
+     """
+     if not extra_channels:
+         return channels
+-    new_channels = [ch for ch in extra_channels if ch not in channels]
+-    channels += new_channels
+-    return channels
++    return list(set(channels) | set(extra_channels))
+ 
+ 
+ def build_notification(event_type, recipient, event_data, extra_channels=None):

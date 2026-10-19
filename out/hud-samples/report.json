@@ -1,0 +1,828 @@
+{
+  "meta": {
+    "repo": "https://github.com/hud-evals/coding-template-sample",
+    "model": "anthropic/claude-sonnet-5.5",
+    "mutants": 8,
+    "calls": 25,
+    "spent": 0.6177129,
+    "seconds": 114.499440908432,
+    "date": "2026-10-14"
+  },
+  "tasks": [
+    {
+      "slug": "sentry-fix",
+      "task_id": "sentry_fix",
+      "test_files": [
+        "test_user_service.py"
+      ],
+      "description": "Fix a crash in the user profile endpoint.\n\nThe user profile service crashes with a KeyError for certain users. Some users\nhave incomplete profile data \u2014 their `profile` field may be None or missing\nentirely. The service works fine for users with complete profiles but fails for\nothers. Investigate and fix the error handling in the user service.\n\nExpected behavior when a user has no profile (the `profile` field is None or\nabsent): fall back to the user's top-level `name` for the display name and use an\nempty string for the bio. Users with a complete profile keep their existing\n`display_name` and `bio`.",
+      "golden_diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..d104ab6 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"Unknown\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 5,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Only handle None profile",
+          "plausible": "The description mentions None first, and the sample data suggests a None profile is the crash case; an agent could handle `is None` using a direct key lookup on user.",
+          "difference": "For user 4 (no `profile` key), `user[\"profile\"]` still raises KeyError, whereas the reference falls back to the name.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    if user[\"profile\"] is None:\n        return {\n            \"name\": user[\"name\"],\n            \"email\": user[\"email\"],\n            \"bio\": \"\",\n        }\n\n    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..f0a8e24 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,6 +32,13 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    if user[\"profile\"] is None:\n+        return {\n+            \"name\": user[\"name\"],\n+            \"email\": user[\"email\"],\n+            \"bio\": \"\",\n+        }\n+\n     return {\n         \"name\": user[\"profile\"][\"display_name\"],\n         \"email\": user[\"email\"],\n",
+          "hidden": "fail",
+          "hidden_tail": "        Args:\n            user_id: The user ID to look up.\n            users_db: Optional user database dict. Defaults to USERS_DB.\n    \n        Returns:\n            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n>       if user[\"profile\"] is None:\n           ^^^^^^^^^^^^^^^\nE       KeyError: 'profile'\n\nuser_service.py:35: KeyError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m2",
+          "title": "Fallback name is empty string",
+          "plausible": "An agent might pick empty strings as safe defaults for every missing field, ignoring the instruction to fall back to the top-level name.",
+          "difference": "For Charlie (profile None), name is \"\" instead of \"Charlie\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", \"\"),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..1e1d39e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", \"\"),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\nE       AssertionError: assert '' == 'Bob'\nE         \nE         - Bob\n\ntest_user_service.py:23: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x108c3c1a0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\nE       AssertionError: assert '' == 'Charlie'\nE         \nE         - Charlie\n\ntest_user_service.py:29: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m3",
+          "title": "Bio falls back to None",
+          "plausible": "Using a plain `.get` for the bio looks natural, but it returns None rather than the required empty string.",
+          "difference": "For a user with no profile, bio is None instead of \"\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..e529ba8 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n        assert result[\"name\"] == \"Bob\"\n        assert result[\"email\"] == \"bob@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:25: AssertionError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x1072d93d0>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n        assert result[\"name\"] == \"Charlie\"\n        assert result[\"email\"] == \"charlie@example.com\"\n>       assert result[\"bio\"] == \"\"\nE       AssertionError: assert None == ''\n\ntest_user_service.py:31: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m4",
+          "title": "Return None for missing profile",
+          "plausible": "An agent might treat an incomplete profile as \"no profile data\" and return early rather than building the fallback dict.",
+          "difference": "For users without a profile, the function returns None instead of a dict with name, email and bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if not profile:\n        return None\n\n    return {\n        \"name\": profile[\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile[\"bio\"],\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..c18ede0 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,14 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if not profile:\n+        return None\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile[\"display_name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile[\"bio\"],\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "\nself = <test_user_service.TestGetUserProfile object at 0x10b4ef9e0>\n\n    def test_user_with_none_profile(self):\n        result = get_user_profile(\"2\", TEST_DB)\n>       assert result[\"name\"] == \"Bob\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:23: TypeError\n_______________ TestGetUserProfile.test_user_without_profile_key _______________\n\nself = <test_user_service.TestGetUserProfile object at 0x10b508860>\n\n    def test_user_without_profile_key(self):\n        result = get_user_profile(\"3\", TEST_DB)\n>       assert result[\"name\"] == \"Charlie\"\n               ^^^^^^^^^^^^^^\nE       TypeError: 'NoneType' object is not subscriptable\n\ntest_user_service.py:29: TypeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\nFAILED test_user_service.py::TestGetUserProfile::test_user_without_profile_key\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m5",
+          "title": "Catch KeyError and TypeError broadly",
+          "plausible": "A quick fix wraps the access in try/except and falls back, which seems to cover all the crash cases.",
+          "difference": "For a profile dict that has display_name but lacks bio, the whole result falls back to the top-level name instead of keeping the existing display_name with an empty bio.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    try:\n        name = user[\"profile\"][\"display_name\"]\n        bio = user[\"profile\"][\"bio\"]\n    except (KeyError, TypeError):\n        name = user[\"name\"]\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user[\"email\"],\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..01f3d6e 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,17 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    try:\n+        name = user[\"profile\"][\"display_name\"]\n+        bio = user[\"profile\"][\"bio\"]\n+    except (KeyError, TypeError):\n+        name = user[\"name\"]\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": name,\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "\"Expected behavior when a user has no profile (the `profile` field is None or absent): fall back to the user's top-level `name`...\" The fallback is tied to the profile being None or absent. A profile that has `display_name` but no `bio` is neither, so the description implies `display_name` is kept. It never states the missing-`bio` case outright.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\nDB = {\n    \"1\": {\n        \"name\": \"Delilah\",\n        \"email\": \"d@example.com\",\n        \"profile\": {\"display_name\": \"Dee\"},\n    },\n}\n\n\ndef test_partial_profile_keeps_display_name_with_empty_bio():\n    result = get_user_profile(\"1\", DB)\n    assert result[\"name\"] == \"Dee\"\n    assert result[\"bio\"] == \"\"\n    assert result[\"email\"] == \"d@example.com\"",
+            "on_baseline": "fail",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____________ test_partial_profile_keeps_display_name_with_empty_bio ____________\n\n    def test_partial_profile_keeps_display_name_with_empty_bio():\n        result = get_user_profile(\"1\", DB)\n>       assert result[\"name\"] == \"Dee\"\nE       AssertionError: assert 'Delilah' == 'Dee'\nE         \nE         - Dee\nE         + Delilah\n\ntest_gst_killer.py:16: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_partial_profile_keeps_display_name_with_empty_bio\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m6",
+          "title": "Fix applied to list_users instead",
+          "plausible": "The agent edits list_users (also in the service) to be defensive and leaves get_user_profile partly fixed, handling only the missing-key case.",
+          "difference": "For Charlie (profile None), `user.get(\"profile\", {})` returns None and `.get` on it raises AttributeError, whereas the reference returns the fallback.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\", {})\n    return {\n        \"name\": profile.get(\"display_name\", user[\"name\"]),\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..de4b83f 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\", {})\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": profile.get(\"display_name\", user[\"name\"]),\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "            dict with 'name', 'email', and 'bio' keys.\n    \n        Raises:\n            ValueError: If the user ID is not found.\n        \"\"\"\n        if users_db is None:\n            users_db = USERS_DB\n    \n        user = users_db.get(str(user_id))\n        if not user:\n            raise ValueError(f\"User {user_id} not found\")\n    \n        profile = user.get(\"profile\", {})\n        return {\n>           \"name\": profile.get(\"display_name\", user[\"name\"]),\n                    ^^^^^^^^^^^\n            \"email\": user[\"email\"],\n            \"bio\": profile.get(\"bio\", \"\"),\n        }\nE       AttributeError: 'NoneType' object has no attribute 'get'\n\nuser_service.py:37: AttributeError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_none_profile\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m7",
+          "title": "Always use top-level name",
+          "plausible": "The agent simplifies by always using the top-level name, which removes the crash path but changes what complete profiles return.",
+          "difference": "For Alice (complete profile), name is \"Alice\" instead of \"Alice A.\".",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\") or {}\n    return {\n        \"name\": user[\"name\"],\n        \"email\": user[\"email\"],\n        \"bio\": profile.get(\"bio\", \"\"),\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..76b21f2 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,11 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\") or {}\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n+        \"name\": user[\"name\"],\n         \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"bio\": profile.get(\"bio\", \"\"),\n     }\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "F....                                                                    [100%]\n=================================== FAILURES ===================================\n__________________ TestGetUserProfile.test_user_with_profile ___________________\n\nself = <test_user_service.TestGetUserProfile object at 0x10ad2c200>\n\n    def test_user_with_profile(self):\n        result = get_user_profile(\"1\", TEST_DB)\n>       assert result[\"name\"] == \"Alice A.\"\nE       AssertionError: assert 'Alice' == 'Alice A.'\nE         \nE         - Alice A.\nE         ?      ---\nE         + Alice\n\ntest_user_service.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED test_user_service.py::TestGetUserProfile::test_user_with_profile - Ass...\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m8",
+          "title": "Email lookup made safe too",
+          "plausible": "The agent over-defensively changes email to `.get`, so it also handles missing emails, and tests the fallback via truthiness.",
+          "difference": "For a user with no `email` key, this returns email None while the reference raises KeyError; it also uses \"\" as the name when `name` is missing.",
+          "edits": [
+            [
+              "user_service.py",
+              "    return {\n        \"name\": user[\"profile\"][\"display_name\"],\n        \"email\": user[\"email\"],\n        \"bio\": user[\"profile\"][\"bio\"],\n    }",
+              "    profile = user.get(\"profile\")\n    if profile:\n        name = profile[\"display_name\"]\n        bio = profile.get(\"bio\", \"\")\n    else:\n        name = user.get(\"name\", \"\")\n        bio = \"\"\n\n    return {\n        \"name\": name,\n        \"email\": user.get(\"email\"),\n        \"bio\": bio,\n    }"
+            ]
+          ],
+          "diff": "diff --git a/user_service.py b/user_service.py\nindex f4ae026..5cb9354 100644\n--- a/user_service.py\n+++ b/user_service.py\n@@ -32,10 +32,18 @@ def get_user_profile(user_id, users_db=None):\n     if not user:\n         raise ValueError(f\"User {user_id} not found\")\n \n+    profile = user.get(\"profile\")\n+    if profile:\n+        name = profile[\"display_name\"]\n+        bio = profile.get(\"bio\", \"\")\n+    else:\n+        name = user.get(\"name\", \"\")\n+        bio = \"\"\n+\n     return {\n-        \"name\": user[\"profile\"][\"display_name\"],\n-        \"email\": user[\"email\"],\n-        \"bio\": user[\"profile\"][\"bio\"],\n+        \"name\": name,\n+        \"email\": user.get(\"email\"),\n+        \"bio\": bio,\n     }\n \n \n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.00s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description says nothing about users missing `email`, or about a missing top-level `name`. It only requires the fallback to `name` and an empty-string bio when `profile` is None or absent. The test asserts that a missing `email` still raises KeyError, which is the baseline behaviour, but the description does not require that.",
+            "code": "import pytest\nfrom user_service import get_user_profile\n\n\ndef test_missing_email_still_raises_keyerror_with_profile():\n    db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"1\", db)\n\n\ndef test_missing_email_still_raises_keyerror_without_profile():\n    db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n    with pytest.raises(KeyError):\n        get_user_profile(\"2\", db)",
+            "on_baseline": "fail",
+            "mutant_tail": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n____________ test_missing_email_still_raises_keyerror_with_profile _____________\n\n    def test_missing_email_still_raises_keyerror_with_profile():\n        db = {\"1\": {\"name\": \"A\", \"profile\": {\"display_name\": \"A.\", \"bio\": \"b\"}}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:7: Failed\n___________ test_missing_email_still_raises_keyerror_without_profile ___________\n\n    def test_missing_email_still_raises_keyerror_without_profile():\n        db = {\"2\": {\"name\": \"Bob\", \"profile\": None}}\n>       with pytest.raises(KeyError):\n             ^^^^^^^^^^^^^^^^^^^^^^^\nE       Failed: DID NOT RAISE KeyError\n\ntest_gst_killer.py:13: Failed\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_with_profile\nFAILED test_gst_killer.py::test_missing_email_still_raises_keyerror_without_profile\n2 failed in 0.01s"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "notif-bug",
+      "task_id": "notif_bug",
+      "test_files": [
+        "test_notifications.py"
+      ],
+      "description": "Fix the broken notification system.\n\nThe notification system is completely silent \u2014 no notifications are generated when\ntasks are created, assigned, or completed. The event handlers are registered and\nthe notification service is initialized, but events never reach their handlers.\nInvestigate the event routing pipeline and fix the issue.",
+      "golden_diff": "diff --git a/services/task_service.py b/services/task_service.py\nindex a654248..4c1e792 100644\n--- a/services/task_service.py\n+++ b/services/task_service.py\n@@ -9,7 +9,7 @@ from services import notification_service\n def _create_event(category: str, action: str, data: dict) -> dict:\n     \"\"\"Build a structured event payload.\"\"\"\n     return {\n-        \"type\": f\"{category}_{action}\",\n+        \"type\": f\"{category}.{action}\",\n         \"timestamp\": config.get_timestamp(),  # Updated in timezone refactor\n         \"data\": data,\n     }\n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 4,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Add underscore aliases for all handlers",
+          "plausible": "The legacy alias already exists for \"task_created\", so extending the same pattern to assigned and completed makes all three emitted events route without touching the emitter.",
+          "difference": "Events still carry underscore types, so a notification created by create_task has event_type \"task_created\" instead of \"task.created\", and assigned and completed are likewise underscore-delimited.",
+          "edits": [
+            [
+              "services/notification_service.py",
+              "        self._handlers[\"task_created\"] = self._handle_task_created",
+              "        self._handlers[\"task_created\"] = self._handle_task_created\n        self._handlers[\"task_assigned\"] = self._handle_task_assigned\n        self._handlers[\"task_completed\"] = self._handle_task_completed"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..4750b0a 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -29,6 +29,8 @@ class NotificationService:\n         # Legacy format kept for backwards compat (pre-refactor callers\n         # still emit \"task_created\" with underscore delimiter).\n         self._handlers[\"task_created\"] = self._handle_task_created\n+        self._handlers[\"task_assigned\"] = self._handle_task_assigned\n+        self._handlers[\"task_completed\"] = self._handle_task_completed\n \n     def handle_event(self, event: dict) -> None:\n         \"\"\"Route an event to its registered handler, if any.\"\"\"\n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description only says \"events never reach their handlers\" and asks to \"investigate the event routing pipeline\". It never says which delimiter event types should use. The code comment calls the underscore form \"legacy\", which hints that dotted is canonical. The hidden tests explicitly accept either delimiter style (\"both are valid fixes\"), so asserting the dotted form goes beyond the stated requirement.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef test_created_event_type_is_dotted():\n    task_service.create_task(\"Write docs\")\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"event_type\"] == \"task.created\"\n\n\ndef test_assigned_event_type_is_dotted():\n    task = task_service.create_task(\"Review PR\")\n    database._notifications.clear()\n    task_service.assign_task(task[\"id\"], \"user-456\")\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"event_type\"] == \"task.assigned\"\n\n\ndef test_completed_event_type_is_dotted():\n    task = task_service.create_task(\"Ship feature\")\n    task_service.assign_task(task[\"id\"], \"user-999\")\n    database._notifications.clear()\n    task_service.complete_task(task[\"id\"])\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"event_type\"] == \"task.completed\"",
+            "on_baseline": "fail",
+            "mutant_tail": "\ntest_gst_killer.py:29: AssertionError\n_____________________ test_completed_event_type_is_dotted ______________________\n\n    def test_completed_event_type_is_dotted():\n        task = task_service.create_task(\"Ship feature\")\n        task_service.assign_task(task[\"id\"], \"user-999\")\n        database._notifications.clear()\n        task_service.complete_task(task[\"id\"])\n        notifs = database.list_notifications()\n        assert len(notifs) >= 1\n>       assert notifs[0][\"event_type\"] == \"task.completed\"\nE       AssertionError: assert 'task_completed' == 'task.completed'\nE         \nE         - task.completed\nE         ?     ^\nE         + task_completed\nE         ?     ^\n\ntest_gst_killer.py:39: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_created_event_type_is_dotted - AssertionError...\nFAILED test_gst_killer.py::test_assigned_event_type_is_dotted - AssertionErro...\nFAILED test_gst_killer.py::test_completed_event_type_is_dotted - AssertionErr...\n3 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m2",
+          "title": "Re-key handlers to underscore format",
+          "plausible": "The emitter uses underscores and the registry uses dots, so the quickest fix is to change the registry keys to match what is emitted.",
+          "difference": "Handlers are keyed \"task_x\", so a direct handle_event({\"type\": \"task.assigned\", ...}) is ignored, and persisted notifications carry underscore event types instead of \"task.assigned\".",
+          "edits": [
+            [
+              "services/notification_service.py",
+              "            self._handlers[f\"task.{action}\"] = handler",
+              "            self._handlers[f\"task_{action}\"] = handler"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..0deb108 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -24,7 +24,7 @@ class NotificationService:\n             (\"assigned\", self._handle_task_assigned),\n             (\"completed\", self._handle_task_completed),\n         ]:\n-            self._handlers[f\"task.{action}\"] = handler\n+            self._handlers[f\"task_{action}\"] = handler\n \n         # Legacy format kept for backwards compat (pre-refactor callers\n         # still emit \"task_created\" with underscore delimiter).\n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description only says events never reach their handlers and that the routing pipeline should be fixed. It never says which event-type delimiter is correct. The hidden tests accept both \"task.assigned\" and \"task_assigned\". The reference fix does make the dotted form the canonical event type, but that is an implementation choice, not something the description states.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef test_assignment_notification_uses_dotted_event_type():\n    task = task_service.create_task(\"Deploy fix\")\n    database._notifications.clear()\n\n    task_service.assign_task(task[\"id\"], \"user-789\")\n\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"recipient_id\"] == \"user-789\"\n    assert notifs[0][\"event_type\"] == \"task.assigned\"\n\n\ndef test_creation_notification_uses_dotted_event_type():\n    task_service.create_task(\"Write docs\")\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"event_type\"] == \"task.created\"",
+            "on_baseline": "fail",
+            "mutant_tail": "E         - task.assigned\nE         ?     ^\nE         + task_assigned\nE         ?     ^\n\ntest_gst_killer.py:25: AssertionError\n______________ test_creation_notification_uses_dotted_event_type _______________\n\n    def test_creation_notification_uses_dotted_event_type():\n        task_service.create_task(\"Write docs\")\n        notifs = database.list_notifications()\n        assert len(notifs) >= 1\n>       assert notifs[0][\"event_type\"] == \"task.created\"\nE       AssertionError: assert 'task_created' == 'task.created'\nE         \nE         - task.created\nE         ?     ^\nE         + task_created\nE         ?     ^\n\ntest_gst_killer.py:32: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_assignment_notification_uses_dotted_event_type\nFAILED test_gst_killer.py::test_creation_notification_uses_dotted_event_type\n2 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m3",
+          "title": "Normalize type in handle_event lookup",
+          "plausible": "Making the router tolerant of both separators fixes the mismatch at the routing layer without touching the emitter.",
+          "difference": "handle_event({\"type\": \"task_assigned\", ...}) now produces a notification (the reference ignores it), and notifications from the service flow still store underscore event types.",
+          "edits": [
+            [
+              "services/notification_service.py",
+              "        handler = self._handlers.get(event.get(\"type\"))",
+              "        etype = (event.get(\"type\") or \"\").replace(\"_\", \".\", 1)\n        handler = self._handlers.get(etype)"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..1fe6def 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -32,7 +32,8 @@ class NotificationService:\n \n     def handle_event(self, event: dict) -> None:\n         \"\"\"Route an event to its registered handler, if any.\"\"\"\n-        handler = self._handlers.get(event.get(\"type\"))\n+        etype = (event.get(\"type\") or \"\").replace(\"_\", \".\", 1)\n+        handler = self._handlers.get(etype)\n         if handler:\n             handler(event)\n \n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description only says events never reach their handlers and that notifications should be generated. It does not say which delimiter the event type uses. The hidden tests explicitly accept either \"task.assigned\" or \"task_assigned\", so asserting the dotted form pins the reference's choice, which matches the dotted handler registration the description implies.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef test_assignment_notification_uses_dotted_event_type():\n    task = task_service.create_task(\"Review PR\")\n    database._notifications.clear()\n\n    task_service.assign_task(task[\"id\"], \"user-456\")\n\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"recipient_id\"] == \"user-456\"\n    assert notifs[0][\"event_type\"] == \"task.assigned\"",
+            "on_baseline": "fail",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_____________ test_assignment_notification_uses_dotted_event_type ______________\n\n    def test_assignment_notification_uses_dotted_event_type():\n        task = task_service.create_task(\"Review PR\")\n        database._notifications.clear()\n    \n        task_service.assign_task(task[\"id\"], \"user-456\")\n    \n        notifs = database.list_notifications()\n        assert len(notifs) >= 1\n        assert notifs[0][\"recipient_id\"] == \"user-456\"\n>       assert notifs[0][\"event_type\"] == \"task.assigned\"\nE       AssertionError: assert 'task_assigned' == 'task.assigned'\nE         \nE         - task.assigned\nE         ?     ^\nE         + task_assigned\nE         ?     ^\n\ntest_gst_killer.py:25: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_assignment_notification_uses_dotted_event_type\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m4",
+          "title": "Leave created event on legacy format",
+          "plausible": "Created events already reach a handler via the legacy alias, so only the assigned and completed events appear to need the dot format.",
+          "difference": "create_task emits type \"task_created\", so the stored notification has event_type \"task_created\" rather than \"task.created\".",
+          "edits": [
+            [
+              "services/task_service.py",
+              "        \"type\": f\"{category}_{action}\",",
+              "        \"type\": f\"{category}_{action}\" if action == \"created\" else f\"{category}.{action}\","
+            ]
+          ],
+          "diff": "diff --git a/services/task_service.py b/services/task_service.py\nindex a654248..42c4d42 100644\n--- a/services/task_service.py\n+++ b/services/task_service.py\n@@ -9,7 +9,7 @@ from services import notification_service\n def _create_event(category: str, action: str, data: dict) -> dict:\n     \"\"\"Build a structured event payload.\"\"\"\n     return {\n-        \"type\": f\"{category}_{action}\",\n+        \"type\": f\"{category}_{action}\" if action == \"created\" else f\"{category}.{action}\",\n         \"timestamp\": config.get_timestamp(),  # Updated in timezone refactor\n         \"data\": data,\n     }\n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says \"no notifications are generated when tasks are created, assigned, or completed\" and asks to fix the \"event routing pipeline\". A fix to event routing should give every task event the same type convention. The description does not name the delimiter, so I only assert that created and assigned events use the same one, not that it is a dot.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef _delim(event_type):\n    if \".\" in event_type:\n        return \".\"\n    if \"_\" in event_type:\n        return \"_\"\n    return None\n\n\ndef test_created_and_assigned_event_types_use_same_convention():\n    task = task_service.create_task(\"Consistent types\")\n    created = database.list_notifications()\n    assert len(created) >= 1\n    created_type = created[0][\"event_type\"]\n\n    database._notifications.clear()\n    task_service.assign_task(task[\"id\"], \"user-1\")\n    assigned = database.list_notifications()\n    assert len(assigned) >= 1\n    assigned_type = assigned[0][\"event_type\"]\n\n    assert _delim(created_type) is not None\n    assert _delim(created_type) == _delim(assigned_type), (\n        f\"Inconsistent event type delimiters: {created_type!r} vs {assigned_type!r}\"\n    )",
+            "on_baseline": "fail",
+            "mutant_tail": "        task = task_service.create_task(\"Consistent types\")\n        created = database.list_notifications()\n        assert len(created) >= 1\n        created_type = created[0][\"event_type\"]\n    \n        database._notifications.clear()\n        task_service.assign_task(task[\"id\"], \"user-1\")\n        assigned = database.list_notifications()\n        assert len(assigned) >= 1\n        assigned_type = assigned[0][\"event_type\"]\n    \n        assert _delim(created_type) is not None\n>       assert _delim(created_type) == _delim(assigned_type), (\n            f\"Inconsistent event type delimiters: {created_type!r} vs {assigned_type!r}\"\n        )\nE       AssertionError: Inconsistent event type delimiters: 'task_created' vs 'task.assigned'\nE       assert '_' == '.'\nE         \nE         - .\nE         + _\n\ntest_gst_killer.py:37: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_created_and_assigned_event_types_use_same_convention\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m5",
+          "title": "Drop legacy handler while fixing emitter",
+          "plausible": "After switching the emitter to dots, the legacy underscore alias looks like dead backwards-compat code and gets cleaned up.",
+          "difference": "A direct handle_event with a legacy {\"type\": \"task_created\"} event now produces no notification, whereas the reference still handles it.",
+          "edits": [
+            [
+              "services/task_service.py",
+              "        \"type\": f\"{category}_{action}\",",
+              "        \"type\": f\"{category}.{action}\","
+            ],
+            [
+              "services/notification_service.py",
+              "        # Legacy format kept for backwards compat (pre-refactor callers\n        # still emit \"task_created\" with underscore delimiter).\n        self._handlers[\"task_created\"] = self._handle_task_created",
+              ""
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..4a839b9 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -26,9 +26,7 @@ class NotificationService:\n         ]:\n             self._handlers[f\"task.{action}\"] = handler\n \n-        # Legacy format kept for backwards compat (pre-refactor callers\n-        # still emit \"task_created\" with underscore delimiter).\n-        self._handlers[\"task_created\"] = self._handle_task_created\n+\n \n     def handle_event(self, event: dict) -> None:\n         \"\"\"Route an event to its registered handler, if any.\"\"\"\ndiff --git a/services/task_service.py b/services/task_service.py\nindex a654248..4c1e792 100644\n--- a/services/task_service.py\n+++ b/services/task_service.py\n@@ -9,7 +9,7 @@ from services import notification_service\n def _create_event(category: str, action: str, data: dict) -> dict:\n     \"\"\"Build a structured event payload.\"\"\"\n     return {\n-        \"type\": f\"{category}_{action}\",\n+        \"type\": f\"{category}.{action}\",\n         \"timestamp\": config.get_timestamp(),  # Updated in timezone refactor\n         \"data\": data,\n     }\n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The task only says events never reach their handlers and asks for the routing to be fixed. It says nothing about the legacy \"task_created\" event type. The only hint is the code comment, \"Legacy format kept for backwards compat (pre-refactor callers still emit 'task_created')\". That makes the behavior plausible, but a human should decide whether to pin it.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef test_legacy_underscore_created_event_still_handled(monkeypatch):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n    captured = []\n    cls = notification_service.NotificationService\n    orig = cls.handle_event\n\n    def wrapper(self, event):\n        captured.append((self, event))\n        return orig(self, event)\n\n    monkeypatch.setattr(cls, \"handle_event\", wrapper)\n\n    task_service.create_task(\"Replay me\")\n    assert captured, \"no event reached the notification service\"\n\n    svc, event = captured[0]\n    legacy = dict(event)\n    legacy[\"type\"] = \"task_created\"\n\n    database._notifications.clear()\n    orig(svc, legacy)\n\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert any(\"Replay me\" in n[\"message\"] for n in notifs)",
+            "on_baseline": "pass",
+            "mutant_tail": "        def wrapper(self, event):\n            captured.append((self, event))\n            return orig(self, event)\n    \n        monkeypatch.setattr(cls, \"handle_event\", wrapper)\n    \n        task_service.create_task(\"Replay me\")\n        assert captured, \"no event reached the notification service\"\n    \n        svc, event = captured[0]\n        legacy = dict(event)\n        legacy[\"type\"] = \"task_created\"\n    \n        database._notifications.clear()\n        orig(svc, legacy)\n    \n        notifs = database.list_notifications()\n>       assert len(notifs) >= 1\nE       assert 0 >= 1\nE        +  where 0 = len([])\n\ntest_gst_killer.py:36: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_legacy_underscore_created_event_still_handled\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m6",
+          "title": "Fuzzy suffix-based routing",
+          "plausible": "Falling back to the trailing action word makes any separator style resolve to a handler, which looks robust.",
+          "difference": "An event like {\"type\": \"user.created\", ...} is routed to the task-created handler and raises KeyError on event[\"data\"][\"task\"], where the reference ignores unknown types.",
+          "edits": [
+            [
+              "services/notification_service.py",
+              "        handler = self._handlers.get(event.get(\"type\"))",
+              "        etype = event.get(\"type\") or \"\"\n        handler = self._handlers.get(etype)\n        if handler is None:\n            action = etype.replace(\".\", \"_\").split(\"_\")[-1]\n            handler = self._handlers.get(f\"task.{action}\")"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..109b1d9 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -32,7 +32,11 @@ class NotificationService:\n \n     def handle_event(self, event: dict) -> None:\n         \"\"\"Route an event to its registered handler, if any.\"\"\"\n-        handler = self._handlers.get(event.get(\"type\"))\n+        etype = event.get(\"type\") or \"\"\n+        handler = self._handlers.get(etype)\n+        if handler is None:\n+            action = etype.replace(\".\", \"_\").split(\"_\")[-1]\n+            handler = self._handlers.get(f\"task.{action}\")\n         if handler:\n             handler(event)\n \n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says events should reach their registered handlers and the pipeline should be fixed. The `handle_event` docstring in the diff context says \"Route an event to its registered handler, if any\". That implies an event with no registered handler is ignored. The description never states this directly, so it is implied rather than required.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef _get_service():\n    # Trigger lazy initialization through the normal path.\n    task_service.create_task(\"Init task\")\n    svc = getattr(notification_service, \"_instance\", None)\n    if svc is None:\n        svc = notification_service.NotificationService()\n    return svc\n\n\ndef test_unknown_event_type_is_ignored():\n    svc = _get_service()\n    database._notifications.clear()\n\n    # Must not raise and must not generate a notification.\n    svc.handle_event({\n        \"type\": \"user.created\",\n        \"timestamp\": \"2024-01-01T00:00:00\",\n        \"data\": {\"user\": \"bob\"},\n    })\n\n    assert database.list_notifications() == []\n\n\ndef test_unknown_assigned_like_type_is_ignored():\n    svc = _get_service()\n    database._notifications.clear()\n\n    svc.handle_event({\n        \"type\": \"project.completed\",\n        \"timestamp\": \"2024-01-01T00:00:00\",\n        \"data\": {\"project\": \"x\"},\n    })\n\n    assert database.list_notifications() == []\n\n\ndef test_task_events_still_notify():\n    task = task_service.create_task(\"Real task\")\n    database._notifications.clear()\n    task_service.assign_task(task[\"id\"], \"user-1\")\n    notifs = database.list_notifications()\n    assert len(notifs) >= 1\n    assert notifs[0][\"recipient_id\"] == \"user-1\"",
+            "on_baseline": "fail",
+            "mutant_tail": ">       svc.handle_event({\n            \"type\": \"project.completed\",\n            \"timestamp\": \"2024-01-01T00:00:00\",\n            \"data\": {\"project\": \"x\"},\n        })\n\ntest_gst_killer.py:43: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nservices/notification_service.py:41: in handle_event\n    handler(event)\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <services.notification_service.NotificationService object at 0x108fcb320>\nevent = {'type': 'project.completed', 'timestamp': '2024-01-01T00:00:00', 'data': {'project': 'x'}}\n\n    def _handle_task_completed(self, event: dict) -> None:\n>       task = event[\"data\"][\"task\"]\n               ^^^^^^^^^^^^^^^^^^^^^\nE       KeyError: 'task'\n\nservices/notification_service.py:65: KeyError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_unknown_event_type_is_ignored - KeyError: 'task'\nFAILED test_gst_killer.py::test_unknown_assigned_like_type_is_ignored - KeyEr...\n2 failed, 1 passed in 0.01s"
+          }
+        },
+        {
+          "id": "m7",
+          "title": "Dot format only for created and completed",
+          "plausible": "An agent tests creation and completion, sees them work, and misses that the assign event uses the same builder and also needs the new format.",
+          "difference": "assign_task emits \"task_assigned\", which matches no handler, so assigning a task creates no notification, whereas the reference creates one for the assignee.",
+          "edits": [
+            [
+              "services/task_service.py",
+              "        \"type\": f\"{category}_{action}\",",
+              "        \"type\": f\"{category}.{action}\" if action in (\"created\", \"completed\") else f\"{category}_{action}\","
+            ]
+          ],
+          "diff": "diff --git a/services/task_service.py b/services/task_service.py\nindex a654248..900aebb 100644\n--- a/services/task_service.py\n+++ b/services/task_service.py\n@@ -9,7 +9,7 @@ from services import notification_service\n def _create_event(category: str, action: str, data: dict) -> dict:\n     \"\"\"Build a structured event payload.\"\"\"\n     return {\n-        \"type\": f\"{category}_{action}\",\n+        \"type\": f\"{category}.{action}\" if action in (\"created\", \"completed\") else f\"{category}_{action}\",\n         \"timestamp\": config.get_timestamp(),  # Updated in timezone refactor\n         \"data\": data,\n     }\n",
+          "hidden": "fail",
+          "hidden_tail": "E        +  where 0 = len([])\n\ntest_notifications.py:49: AssertionError\n_ TestNotificationDirect.test_assign_task_notification_has_correct_event_type __\n\nself = <test_notifications.TestNotificationDirect object at 0x109902c30>\n\n    def test_assign_task_notification_has_correct_event_type(self):\n        \"\"\"The assignment notification event_type should indicate task assignment.\"\"\"\n        task = task_service.create_task(\"Deploy fix\")\n        database._notifications.clear()\n    \n        task_service.assign_task(task[\"id\"], \"user-789\")\n    \n        notifs = database.list_notifications()\n>       assert len(notifs) >= 1, \"No assignment notification was created\"\nE       AssertionError: No assignment notification was created\nE       assert 0 >= 1\nE        +  where 0 = len([])\n\ntest_notifications.py:68: AssertionError\n=========================== short test summary info ============================\nFAILED test_notifications.py::TestNotificationDirect::test_assign_task_sends_notification\nFAILED test_notifications.py::TestNotificationDirect::test_assign_task_notification_has_correct_event_type\n2 failed, 2 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m8",
+          "title": "Dot emitter plus blanket underscore aliases",
+          "plausible": "The agent fixes the emitter and also adds underscore aliases for every handler to be safe with pre-refactor callers.",
+          "difference": "A direct handle_event({\"type\": \"task_assigned\", ...}) or \"task_completed\" now produces a notification, whereas the reference ignores underscore types other than task_created.",
+          "edits": [
+            [
+              "services/task_service.py",
+              "        \"type\": f\"{category}_{action}\",",
+              "        \"type\": f\"{category}.{action}\","
+            ],
+            [
+              "services/notification_service.py",
+              "        self._handlers[\"task_created\"] = self._handle_task_created",
+              "        for action in (\"created\", \"assigned\", \"completed\"):\n            self._handlers[f\"task_{action}\"] = self._handlers[f\"task.{action}\"]"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_service.py b/services/notification_service.py\nindex 62b09b0..dec2b3c 100644\n--- a/services/notification_service.py\n+++ b/services/notification_service.py\n@@ -28,7 +28,8 @@ class NotificationService:\n \n         # Legacy format kept for backwards compat (pre-refactor callers\n         # still emit \"task_created\" with underscore delimiter).\n-        self._handlers[\"task_created\"] = self._handle_task_created\n+        for action in (\"created\", \"assigned\", \"completed\"):\n+            self._handlers[f\"task_{action}\"] = self._handlers[f\"task.{action}\"]\n \n     def handle_event(self, event: dict) -> None:\n         \"\"\"Route an event to its registered handler, if any.\"\"\"\ndiff --git a/services/task_service.py b/services/task_service.py\nindex a654248..4c1e792 100644\n--- a/services/task_service.py\n+++ b/services/task_service.py\n@@ -9,7 +9,7 @@ from services import notification_service\n def _create_event(category: str, action: str, data: dict) -> dict:\n     \"\"\"Build a structured event payload.\"\"\"\n     return {\n-        \"type\": f\"{category}_{action}\",\n+        \"type\": f\"{category}.{action}\",\n         \"timestamp\": config.get_timestamp(),  # Updated in timezone refactor\n         \"data\": data,\n     }\n",
+          "hidden": "pass",
+          "hidden_tail": "....                                                                     [100%]\n4 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description only says events must reach their handlers so that notifications are produced when tasks are created, assigned, or completed. It never says that a legacy underscore \"task_assigned\" or \"task_completed\" event sent straight to the service must be ignored. The only behavioral difference from the wrong fix is that unspecified case, so a human should decide whether it is wanted.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nimport database\nfrom services import task_service, notification_service\n\n\ndef setup_function(_):\n    database._tasks.clear()\n    database._notifications.clear()\n    notification_service._instance = None\n\n\ndef test_underscore_assigned_event_not_routed_directly():\n    captured = []\n    cls = notification_service.NotificationService\n    orig = cls.handle_event\n\n    def spy(self, event):\n        captured.append(dict(event))\n        return orig(self, event)\n\n    cls.handle_event = spy\n    try:\n        task = task_service.create_task(\"Review PR\")\n        database._notifications.clear()\n        task_service.assign_task(task[\"id\"], \"user-456\")\n    finally:\n        cls.handle_event = orig\n\n    # The real pipeline must have produced an assignment notification\n    assert len(database.list_notifications()) >= 1\n    assigned = [e for e in captured if e[\"type\"].endswith(\"assigned\")]\n    assert assigned\n\n    # Feed a legacy underscore-style assigned event directly to a fresh service\n    database._notifications.clear()\n    ev = dict(assigned[0])\n    ev[\"type\"] = \"task_assigned\"\n    svc = cls()\n    svc.handle_event(ev)\n    assert database.list_notifications() == []",
+            "on_baseline": "fail",
+            "mutant_tail": "            task_service.assign_task(task[\"id\"], \"user-456\")\n        finally:\n            cls.handle_event = orig\n    \n        # The real pipeline must have produced an assignment notification\n        assert len(database.list_notifications()) >= 1\n        assigned = [e for e in captured if e[\"type\"].endswith(\"assigned\")]\n        assert assigned\n    \n        # Feed a legacy underscore-style assigned event directly to a fresh service\n        database._notifications.clear()\n        ev = dict(assigned[0])\n        ev[\"type\"] = \"task_assigned\"\n        svc = cls()\n        svc.handle_event(ev)\n>       assert database.list_notifications() == []\nE       assert [{'id': 'bab9...w PR'.\", ...}] == []\nE         \nE         Left contains one more item: {'id': 'bab9d19eaa70', 'event_type': 'task_assigned', 'recipient_id': 'user-456', 'message': \"You have been assigned task 'Review PR'.\", ...}\nE         Use -v to get more diff\n\ntest_gst_killer.py:44: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_underscore_assigned_event_not_routed_directly\n1 failed in 0.01s"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "settings-v2",
+      "task_id": "settings_v2",
+      "test_files": [
+        "test_settings.py"
+      ],
+      "description": "Fix disappearing fields in API responses.\n\nAPI responses for the settings and user endpoints are randomly dropping fields\nthat have values like 0, false, or empty string. Direct key lookups work fine,\nbut when responses are serialized to JSON, certain valid fields disappear. The\nissue affects multiple endpoints and seems related to how data is iterated over\nduring serialization.",
+      "golden_diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..d12be9b 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,16 +20,16 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v is not None]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v is not None]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return iter(k for k, v in super().items() if v is not None)\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return sum(1 for v in super().values() if v is not None)\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 9,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Only items() fixed",
+          "plausible": "get_effective_settings and dict() go through items(), so fixing that one method resolves the visible endpoint symptom.",
+          "difference": "For CompactDict({\"a\": 0, \"b\": False}), list(d), len(d) and values() still drop the falsy entries (reference keeps them), so any caller that iterates keys or counts entries is still wrong.",
+          "edits": [
+            [
+              "utils/types.py",
+              "        return [(k, v) for k, v in super().items() if v]",
+              "        return [(k, v) for k, v in super().items() if v is not None]"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..aa6f6e3 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,7 +20,7 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v is not None]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n         return [v for v in super().values() if v]\n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "\"API responses ... randomly dropping fields that have values like 0, false, or empty string ... seems related to how data is iterated over during serialization.\" Key iteration, length and values are all iteration paths, but the description does not name them.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef test_iter_keeps_falsy_values():\n    d = CompactDict({\"a\": 0, \"b\": False, \"c\": \"\", \"d\": 5})\n    assert set(list(d)) == {\"a\", \"b\", \"c\", \"d\"}\n\n\ndef test_len_counts_falsy_values():\n    d = CompactDict({\"a\": 0, \"b\": False, \"c\": \"\", \"d\": 5})\n    assert len(d) == 4\n\n\ndef test_values_keep_falsy_values():\n    d = CompactDict({\"a\": 0, \"b\": False, \"c\": \"\", \"d\": 5})\n    vals = d.values()\n    assert len(vals) == 4\n    assert 0 in vals and \"\" in vals and 5 in vals\n\n\ndef test_items_keep_falsy_values():\n    d = CompactDict({\"a\": 0, \"b\": False, \"c\": \"\"})\n    assert dict(d.items()) == {\"a\": 0, \"b\": False, \"c\": \"\"}\n\n\ndef test_none_still_dropped_in_iteration():\n    d = CompactDict({\"a\": 0, \"n\": None})\n    assert list(d) == [\"a\"]\n    assert len(d) == 1",
+            "on_baseline": "fail",
+            "mutant_tail": "    def test_values_keep_falsy_values():\n        d = CompactDict({\"a\": 0, \"b\": False, \"c\": \"\", \"d\": 5})\n        vals = d.values()\n>       assert len(vals) == 4\nE       assert 1 == 4\nE        +  where 1 = len([5])\n\ntest_gst_killer.py:22: AssertionError\n_____________________ test_none_still_dropped_in_iteration _____________________\n\n    def test_none_still_dropped_in_iteration():\n        d = CompactDict({\"a\": 0, \"n\": None})\n>       assert list(d) == [\"a\"]\nE       AssertionError: assert [] == ['a']\nE         \nE         Right contains one more item: 'a'\nE         Use -v to get more diff\n\ntest_gst_killer.py:33: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_iter_keeps_falsy_values - AssertionError: ass...\nFAILED test_gst_killer.py::test_len_counts_falsy_values - AssertionError: ass...\nFAILED test_gst_killer.py::test_values_keep_falsy_values - assert 1 == 4\nFAILED test_gst_killer.py::test_none_still_dropped_in_iteration - AssertionEr...\n4 failed, 1 passed in 0.01s"
+          }
+        },
+        {
+          "id": "m2",
+          "title": "Keeps 0/False but still drops empty string",
+          "plausible": "The report highlights 0 and false, so the agent special-cases numeric and boolean falsy values and treats empty strings as truly empty.",
+          "difference": "Charlie's bio \"\" is still dropped from iteration, items() and len(), while the reference keeps it.",
+          "edits": [
+            [
+              "utils/types.py",
+              "        return [(k, v) for k, v in super().items() if v]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              "        return [(k, v) for k, v in super().items() if v or v == 0]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v or v == 0]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v or v == 0)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v or v == 0)"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..d982f7d 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,16 +20,16 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v or v == 0]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v or v == 0]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return iter(k for k, v in super().items() if v or v == 0)\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return sum(1 for v in super().values() if v or v == 0)\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "fail",
+          "hidden_tail": "..F......                                                                [100%]\n=================================== FAILURES ===================================\n_________________ TestSettingsReadPath.test_charlie_empty_bio __________________\n\nself = <test_settings.TestSettingsReadPath object at 0x106e395e0>\n\n    def test_charlie_empty_bio(self):\n        \"\"\"Charlie intentionally cleared his bio. Must stay empty.\"\"\"\n        settings = settings_service.get_effective_settings(\"user-charlie\")\n        assert settings is not None\n        assert \"bio\" in settings, \"bio key missing from response\"\n>       assert settings[\"bio\"] == \"\", (\n            f\"Charlie set bio to empty string, but got {settings.get('bio')!r}\"\n        )\nE       AssertionError: Charlie set bio to empty string, but got \"Hey there! I'm using TaskApp.\"\nE       assert \"Hey there! I...sing TaskApp.\" == ''\nE         \nE         + Hey there! I'm using TaskApp.\n\ntest_settings.py:41: AssertionError\n=========================== short test summary info ============================\nFAILED test_settings.py::TestSettingsReadPath::test_charlie_empty_bio - Asser...\n1 failed, 8 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m3",
+          "title": "Bypass CompactDict in database layer",
+          "plausible": "The agent sidesteps the problem by returning a plain dict from the database so settings are never filtered, without touching CompactDict.",
+          "difference": "CompactDict itself is still broken: CompactDict({\"a\": 0}).items() and list() still omit the 0 entry, whereas the reference returns it.",
+          "edits": [
+            [
+              "database.py",
+              "    return CompactDict(copy.deepcopy(user[\"settings\"]))",
+              "    return copy.deepcopy(user[\"settings\"])"
+            ]
+          ],
+          "diff": "diff --git a/database.py b/database.py\nindex 4d43619..3d7538c 100644\n--- a/database.py\n+++ b/database.py\n@@ -59,7 +59,7 @@ def get_user_settings(user_id: str) -> CompactDict | None:\n     user = _users.get(user_id)\n     if user is None:\n         return None\n-    return CompactDict(copy.deepcopy(user[\"settings\"]))\n+    return copy.deepcopy(user[\"settings\"])\n \n \n def update_user_settings(user_id: str, updates: dict) -> bool:\n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says \"certain valid fields disappear\" when serialized, with \"values like 0, false, or empty string\", and that it is \"related to how data is iterated over\". The test asserts that iterating a CompactDict (items, values, iter, len) keeps 0, False and \"\". It does not assert that None is dropped, because the description doesn't settle that.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef make():\n    return CompactDict({\"zero\": 0, \"off\": False, \"empty\": \"\", \"name\": \"x\"})\n\n\ndef test_items_keep_falsy_values():\n    d = make()\n    assert dict(d.items()) == {\"zero\": 0, \"off\": False, \"empty\": \"\", \"name\": \"x\"}\n\n\ndef test_iteration_keeps_falsy_keys():\n    d = make()\n    assert set(list(d)) == {\"zero\", \"off\", \"empty\", \"name\"}\n\n\ndef test_values_keep_falsy_values():\n    d = make()\n    vals = d.values()\n    assert 0 in vals and \"\" in vals and any(v is False for v in vals)\n    assert len(vals) == 4\n\n\ndef test_len_counts_falsy_values():\n    assert len(make()) == 4\n\n\ndef test_dict_conversion_keeps_falsy():\n    d = make()\n    assert dict(d) == {\"zero\": 0, \"off\": False, \"empty\": \"\", \"name\": \"x\"}",
+            "on_baseline": "fail",
+            "mutant_tail": "test_gst_killer.py:20: AssertionError\n________________________ test_values_keep_falsy_values _________________________\n\n    def test_values_keep_falsy_values():\n        d = make()\n        vals = d.values()\n>       assert 0 in vals and \"\" in vals and any(v is False for v in vals)\nE       AssertionError: assert (0 in ['x'])\n\ntest_gst_killer.py:26: AssertionError\n_________________________ test_len_counts_falsy_values _________________________\n\n    def test_len_counts_falsy_values():\n>       assert len(make()) == 4\nE       AssertionError: assert 1 == 4\nE        +  where 1 = len(CompactDict({'name': 'x'}))\nE        +    where CompactDict({'name': 'x'}) = make()\n\ntest_gst_killer.py:31: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_items_keep_falsy_values - AssertionError: ass...\nFAILED test_gst_killer.py::test_iteration_keeps_falsy_keys - AssertionError: ...\nFAILED test_gst_killer.py::test_values_keep_falsy_values - AssertionError: as...\nFAILED test_gst_killer.py::test_len_counts_falsy_values - AssertionError: ass...\n4 failed, 1 passed in 0.01s"
+          }
+        },
+        {
+          "id": "m4",
+          "title": "Remove all filtering overrides",
+          "plausible": "The agent concludes that filtering during iteration is the root problem and deletes the overrides so CompactDict behaves like a normal dict.",
+          "difference": "None-valued entries are no longer omitted: CompactDict({\"a\": None}).items() returns [(\"a\", None)] and len is 1, while the reference still drops None.",
+          "edits": [
+            [
+              "utils/types.py",
+              "    def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n        return [(k, v) for k, v in super().items() if v]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              ""
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..bbe2a02 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -19,17 +19,7 @@ class CompactDict(dict):\n     by ``json.dumps`` and ``dict()`` so that API responses stay lean.\n     \"\"\"\n \n-    def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n \n-    def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n-\n-    def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n-\n-    def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 2,
+            "spec": "ambiguous",
+            "basis": "The description only says that falsy values like 0, false and \"\" must not disappear during serialization or iteration. It does not say whether None values should still be omitted. The reference does keep dropping None (it filters on `is not None`), but the description never states that. The test pins that behavior because it is the only thing that separates the reference from the wrong fix.",
+            "code": "import os\nimport sys\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef make():\n    return CompactDict({\"zero\": 0, \"off\": False, \"blank\": \"\", \"none\": None, \"name\": \"x\"})\n\n\ndef test_falsy_values_kept_in_items():\n    d = make()\n    items = dict(d.items())\n    assert items[\"zero\"] == 0\n    assert items[\"off\"] is False\n    assert items[\"blank\"] == \"\"\n    assert items[\"name\"] == \"x\"\n\n\ndef test_none_values_omitted_from_items():\n    d = make()\n    assert \"none\" not in dict(d.items())\n\n\ndef test_none_omitted_from_iteration_and_len():\n    d = make()\n    keys = list(iter(d))\n    assert set(keys) == {\"zero\", \"off\", \"blank\", \"name\"}\n    assert len(d) == 4\n\n\ndef test_none_omitted_from_values():\n    d = make()\n    vals = list(d.values())\n    assert None not in vals\n    assert len(vals) == 4",
+            "on_baseline": "fail",
+            "mutant_tail": "    def test_none_omitted_from_iteration_and_len():\n        d = make()\n        keys = list(iter(d))\n>       assert set(keys) == {\"zero\", \"off\", \"blank\", \"name\"}\nE       AssertionError: assert {'blank', 'na...'off', 'zero'} == {'blank', 'na...'off', 'zero'}\nE         \nE         Extra items in the left set:\nE         'none'\nE         Use -v to get more diff\n\ntest_gst_killer.py:30: AssertionError\n________________________ test_none_omitted_from_values _________________________\n\n    def test_none_omitted_from_values():\n        d = make()\n        vals = list(d.values())\n>       assert None not in vals\nE       AssertionError: assert None not in [0, False, '', None, 'x']\n\ntest_gst_killer.py:37: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_none_values_omitted_from_items - AssertionErr...\nFAILED test_gst_killer.py::test_none_omitted_from_iteration_and_len - Asserti...\nFAILED test_gst_killer.py::test_none_omitted_from_values - AssertionError: as...\n3 failed, 1 passed in 0.01s"
+          }
+        },
+        {
+          "id": "m5",
+          "title": "Also drops empty strings",
+          "plausible": "The agent keeps the compact-payload intent by treating None and \"\" as empty, and only rescues 0 and False.",
+          "difference": "A setting like bio=\"\" disappears from items(), iteration and len(), whereas the reference preserves it.",
+          "edits": [
+            [
+              "utils/types.py",
+              "        return [(k, v) for k, v in super().items() if v]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              "        return [(k, v) for k, v in super().items() if v is not None and v != \"\"]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v is not None and v != \"\"]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v is not None and v != \"\")\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v is not None and v != \"\")"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..6d68dda 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,16 +20,16 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v is not None and v != \"\"]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v is not None and v != \"\"]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return iter(k for k, v in super().items() if v is not None and v != \"\")\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return sum(1 for v in super().values() if v is not None and v != \"\")\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "fail",
+          "hidden_tail": "..F......                                                                [100%]\n=================================== FAILURES ===================================\n_________________ TestSettingsReadPath.test_charlie_empty_bio __________________\n\nself = <test_settings.TestSettingsReadPath object at 0x106fd1550>\n\n    def test_charlie_empty_bio(self):\n        \"\"\"Charlie intentionally cleared his bio. Must stay empty.\"\"\"\n        settings = settings_service.get_effective_settings(\"user-charlie\")\n        assert settings is not None\n        assert \"bio\" in settings, \"bio key missing from response\"\n>       assert settings[\"bio\"] == \"\", (\n            f\"Charlie set bio to empty string, but got {settings.get('bio')!r}\"\n        )\nE       AssertionError: Charlie set bio to empty string, but got \"Hey there! I'm using TaskApp.\"\nE       assert \"Hey there! I...sing TaskApp.\" == ''\nE         \nE         + Hey there! I'm using TaskApp.\n\ntest_settings.py:41: AssertionError\n=========================== short test summary info ============================\nFAILED test_settings.py::TestSettingsReadPath::test_charlie_empty_bio - Asser...\n1 failed, 8 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m6",
+          "title": "Iteration and len unfiltered, items filtered",
+          "plausible": "The agent fixes items() and values() for JSON/dict() use and simply makes __iter__ and __len__ delegate to dict defaults.",
+          "difference": "For CompactDict({\"a\": None, \"b\": 0}), list(d) gives [\"a\",\"b\"] and len is 2, whereas the reference yields [\"b\"] and 1.",
+          "edits": [
+            [
+              "utils/types.py",
+              "        return [(k, v) for k, v in super().items() if v]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              "        return [(k, v) for k, v in super().items() if v is not None]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v is not None]\n\n    def __iter__(self) -> Iterator[str]:\n        return super().__iter__()\n\n    def __len__(self) -> int:\n        return super().__len__()"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..832c87e 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,16 +20,16 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v is not None]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v is not None]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return super().__iter__()\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return super().__len__()\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The task says falsy values (0, false, \"\") must stop disappearing during iteration and serialization. It says nothing about None. The reference keeps None filtered in `__iter__` and `__len__`, consistent with `items()` and `values()`. The wrong fix keeps None keys in `list(d)` and `len(d)` while `items()` still drops them. A reader would expect these views to agree, but the description never says None must still be hidden.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef test_iter_and_len_skip_none_but_keep_falsy():\n    d = CompactDict({\"a\": None, \"b\": 0, \"c\": False, \"d\": \"\", \"e\": \"x\"})\n    assert sorted(list(d)) == [\"b\", \"c\", \"d\", \"e\"]\n    assert len(d) == 4\n\n\ndef test_iteration_views_consistent():\n    d = CompactDict({\"a\": None, \"b\": 0})\n    assert list(d) == [\"b\"]\n    assert len(d) == 1\n    assert [k for k, _ in d.items()] == list(d)\n    assert d.values() == [0]\n\n\ndef test_direct_lookup_still_works():\n    d = CompactDict({\"a\": None, \"b\": 0})\n    assert d[\"b\"] == 0",
+            "on_baseline": "fail",
+            "mutant_tail": "        d = CompactDict({\"a\": None, \"b\": 0, \"c\": False, \"d\": \"\", \"e\": \"x\"})\n>       assert sorted(list(d)) == [\"b\", \"c\", \"d\", \"e\"]\nE       AssertionError: assert ['a', 'b', 'c', 'd', 'e'] == ['b', 'c', 'd', 'e']\nE         \nE         At index 0 diff: 'a' != 'b'\nE         Left contains one more item: 'e'\nE         Use -v to get more diff\n\ntest_gst_killer.py:11: AssertionError\n_______________________ test_iteration_views_consistent ________________________\n\n    def test_iteration_views_consistent():\n        d = CompactDict({\"a\": None, \"b\": 0})\n>       assert list(d) == [\"b\"]\nE       AssertionError: assert ['a', 'b'] == ['b']\nE         \nE         At index 0 diff: 'a' != 'b'\nE         Left contains one more item: 'b'\nE         Use -v to get more diff\n\ntest_gst_killer.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_iter_and_len_skip_none_but_keep_falsy - Asser...\nFAILED test_gst_killer.py::test_iteration_views_consistent - AssertionError: ...\n2 failed, 1 passed in 0.01s"
+          }
+        },
+        {
+          "id": "m7",
+          "title": "Fix everything except items()",
+          "plausible": "The agent updates __iter__, values and __len__ and overlooks that items() is the path used by settings merging.",
+          "difference": "CompactDict({\"a\": 0}).items() still returns [], so GET /settings/user-alice still shows defaults instead of her notification_frequency 0 and dark_mode False; the reference returns them.",
+          "edits": [
+            [
+              "utils/types.py",
+              "    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              "    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v is not None]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v is not None)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v is not None)"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..2f31b64 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -23,13 +23,13 @@ class CompactDict(dict):\n         return [(k, v) for k, v in super().items() if v]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v is not None]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return iter(k for k, v in super().items() if v is not None)\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return sum(1 for v in super().values() if v is not None)\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "fail",
+          "hidden_tail": "test_settings.py:87: AssertionError\n________________ TestWriteReadCycle.test_write_false_then_read _________________\n\nself = <test_settings.TestWriteReadCycle object at 0x10b72aea0>\n\n    def test_write_false_then_read(self):\n        \"\"\"Write dark_mode=False, read back, must get False.\"\"\"\n        database.update_user_settings(\"user-bob\", {\"dark_mode\": False})\n        settings = settings_service.get_effective_settings(\"user-bob\")\n        assert \"dark_mode\" in settings, \"dark_mode key missing after write\"\n>       assert settings[\"dark_mode\"] is False, (\n            f\"Wrote False, got back {settings.get('dark_mode')}\"\n        )\nE       AssertionError: Wrote False, got back True\nE       assert True is False\n\ntest_settings.py:96: AssertionError\n=========================== short test summary info ============================\nFAILED test_settings.py::TestSettingsReadPath::test_alice_notification_frequency_zero\nFAILED test_settings.py::TestSettingsReadPath::test_alice_dark_mode_false - A...\nFAILED test_settings.py::TestSettingsReadPath::test_charlie_empty_bio - Asser...\nFAILED test_settings.py::TestNotificationCascade::test_alice_should_not_be_notified\nFAILED test_settings.py::TestWriteReadCycle::test_write_zero_then_read - Asse...\nFAILED test_settings.py::TestWriteReadCycle::test_write_false_then_read - Ass...\n6 failed, 3 passed in 0.02s",
+          "killer": {}
+        },
+        {
+          "id": "m8",
+          "title": "Also drops empty containers",
+          "plausible": "The agent treats \"empty\" collections as noise per the module docstring and keeps only scalars like 0, False and \"\".",
+          "difference": "An entry such as CompactDict({\"tags\": []}) is omitted from items(), iteration and len(), while the reference keeps it.",
+          "edits": [
+            [
+              "utils/types.py",
+              "        return [(k, v) for k, v in super().items() if v]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v)\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v)",
+              "        return [(k, v) for k, v in super().items() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v)]\n\n    def values(self) -> list[Any]:  # type: ignore[override]\n        return [v for v in super().values() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v)]\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(k for k, v in super().items() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v))\n\n    def __len__(self) -> int:\n        return sum(1 for v in super().values() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v))"
+            ]
+          ],
+          "diff": "diff --git a/utils/types.py b/utils/types.py\nindex ce51793..1cddbc8 100644\n--- a/utils/types.py\n+++ b/utils/types.py\n@@ -20,16 +20,16 @@ class CompactDict(dict):\n     \"\"\"\n \n     def items(self) -> list[tuple[str, Any]]:  # type: ignore[override]\n-        return [(k, v) for k, v in super().items() if v]\n+        return [(k, v) for k, v in super().items() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v)]\n \n     def values(self) -> list[Any]:  # type: ignore[override]\n-        return [v for v in super().values() if v]\n+        return [v for v in super().values() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v)]\n \n     def __iter__(self) -> Iterator[str]:\n-        return iter(k for k, v in super().items() if v)\n+        return iter(k for k, v in super().items() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v))\n \n     def __len__(self) -> int:\n-        return sum(1 for v in super().values() if v)\n+        return sum(1 for v in super().values() if v is not None and not (isinstance(v, (list, dict, tuple, set)) and not v))\n \n     def __repr__(self) -> str:\n         filtered = {k: v for k, v in super().items() if v}\n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says \"valid fields disappear\" and names \"0, false, or empty string\" as examples (\"values like\"). An empty list is the same kind of valid falsy value. The description doesn't mention empty collections explicitly, so this is an extension of the stated examples.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef make():\n    return CompactDict({\"tags\": [], \"meta\": {}, \"n\": 0, \"flag\": False, \"bio\": \"\", \"gone\": None})\n\n\ndef test_empty_collections_kept_in_items():\n    d = make()\n    assert dict(d.items()) == {\"tags\": [], \"meta\": {}, \"n\": 0, \"flag\": False, \"bio\": \"\"}\n\n\ndef test_empty_collections_kept_in_iter_and_len():\n    d = make()\n    assert set(iter(d)) == {\"tags\", \"meta\", \"n\", \"flag\", \"bio\"}\n    assert len(d) == 5\n\n\ndef test_empty_collections_kept_in_values():\n    d = make()\n    vals = d.values()\n    assert [] in vals\n    assert {} in vals\n    assert len(vals) == 5",
+            "on_baseline": "fail",
+            "mutant_tail": "    def test_empty_collections_kept_in_iter_and_len():\n        d = make()\n>       assert set(iter(d)) == {\"tags\", \"meta\", \"n\", \"flag\", \"bio\"}\nE       AssertionError: assert {'bio', 'flag', 'n'} == {'bio', 'flag..., 'n', 'tags'}\nE         \nE         Extra items in the right set:\nE         'meta'\nE         'tags'\nE         Use -v to get more diff\n\ntest_gst_killer.py:20: AssertionError\n____________________ test_empty_collections_kept_in_values _____________________\n\n    def test_empty_collections_kept_in_values():\n        d = make()\n        vals = d.values()\n>       assert [] in vals\nE       AssertionError: assert [] in [0, False, '']\n\ntest_gst_killer.py:27: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_empty_collections_kept_in_items - AssertionEr...\nFAILED test_gst_killer.py::test_empty_collections_kept_in_iter_and_len - Asse...\nFAILED test_gst_killer.py::test_empty_collections_kept_in_values - AssertionE...\n3 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m9",
+          "title": "Patch merge loop in settings_service only",
+          "plausible": "The agent sees that get_effective_settings is where Alice's 0/False values get lost, and bypasses the filtered iteration there.",
+          "difference": "CompactDict is left broken: CompactDict({\"a\": 0}).items() still returns [] and len() is 0, whereas the reference keeps the entry.",
+          "edits": [
+            [
+              "services/settings_service.py",
+              "    for key, value in custom.items():\n        if value is not None:\n            effective[key] = value",
+              "    for key in dict.keys(custom):\n        value = dict.__getitem__(custom, key)\n        if value is not None:\n            effective[key] = value"
+            ]
+          ],
+          "diff": "diff --git a/services/settings_service.py b/services/settings_service.py\nindex dc44e16..9f4a9b0 100644\n--- a/services/settings_service.py\n+++ b/services/settings_service.py\n@@ -20,7 +20,8 @@ def get_effective_settings(user_id: str) -> dict | None:\n         return None\n \n     effective = {**config.DEFAULT_SETTINGS}\n-    for key, value in custom.items():\n+    for key in dict.keys(custom):\n+        value = dict.__getitem__(custom, key)\n         if value is not None:\n             effective[key] = value\n \n",
+          "hidden": "pass",
+          "hidden_tail": ".........                                                                [100%]\n9 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says fields with values like \"0, false, or empty string\" disappear \"when responses are serialized to JSON\" and that the problem \"seems related to how data is iterated over\". It doesn't name CompactDict. A reader would expect the iteration methods (items, values, iteration, len) to keep valid falsy values, and that is what I assert.",
+            "code": "import sys\nimport os\n\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom utils.types import CompactDict\n\n\ndef _make():\n    return CompactDict({\"zero\": 0, \"flag\": False, \"empty\": \"\", \"name\": \"x\"})\n\n\ndef test_items_keep_falsy_values():\n    d = _make()\n    assert dict(d.items()) == {\"zero\": 0, \"flag\": False, \"empty\": \"\", \"name\": \"x\"}\n\n\ndef test_iteration_keeps_falsy_keys():\n    d = _make()\n    assert set(iter(d)) == {\"zero\", \"flag\", \"empty\", \"name\"}\n\n\ndef test_values_keep_falsy_values():\n    d = _make()\n    vals = d.values()\n    assert len(vals) == 4\n    assert 0 in vals and \"\" in vals and False in vals\n\n\ndef test_len_counts_falsy_values():\n    assert len(_make()) == 4\n\n\ndef test_direct_lookup_still_works():\n    d = _make()\n    assert d[\"zero\"] == 0\n    assert d[\"flag\"] is False\n    assert d[\"empty\"] == \"\"",
+            "on_baseline": "fail",
+            "mutant_tail": "________________________ test_values_keep_falsy_values _________________________\n\n    def test_values_keep_falsy_values():\n        d = _make()\n        vals = d.values()\n>       assert len(vals) == 4\nE       AssertionError: assert 1 == 4\nE        +  where 1 = len(['x'])\n\ntest_gst_killer.py:26: AssertionError\n_________________________ test_len_counts_falsy_values _________________________\n\n    def test_len_counts_falsy_values():\n>       assert len(_make()) == 4\nE       AssertionError: assert 1 == 4\nE        +  where 1 = len(CompactDict({'name': 'x'}))\nE        +    where CompactDict({'name': 'x'}) = _make()\n\ntest_gst_killer.py:31: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_items_keep_falsy_values - AssertionError: ass...\nFAILED test_gst_killer.py::test_iteration_keeps_falsy_keys - AssertionError: ...\nFAILED test_gst_killer.py::test_values_keep_falsy_values - AssertionError: as...\nFAILED test_gst_killer.py::test_len_counts_falsy_values - AssertionError: ass...\n4 failed, 1 passed in 0.01s"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "webhook-bug",
+      "task_id": "webhook_bug",
+      "test_files": [
+        "test_notifications.py"
+      ],
+      "description": "Fix inconsistent webhook notification channels.\n\nWebhook notifications work correctly on the first request for a given event type,\nbut subsequent requests for the same event type produce incorrect or duplicated\nnotification channels. The issue gets worse with repeated requests \u2014 channels\naccumulate and sort order changes unexpectedly.",
+      "golden_diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..344ec35 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -4,6 +4,7 @@ import hashlib\n import time\n \n from services.channel_resolver import resolve_channels, resolve_priority\n+import copy\n from config import CHANNEL_REGISTRY\n from utils.formatters import format_subject, format_body, truncate\n \n@@ -108,7 +109,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     -------\n     dict or None\n     \"\"\"\n-    channels = resolve_channels(event_type)\n+    channels = list(resolve_channels(event_type))\n     priority = resolve_priority(event_type)\n \n     if channels is None:\n",
+      "validity": {
+        "baseline": "fail",
+        "golden": "pass",
+        "valid": true,
+        "golden_tail": ""
+      },
+      "hidden_tests": 5,
+      "mutants": [
+        {
+          "id": "m1",
+          "title": "Dedupe output but leave shared list mutated",
+          "plausible": "The symptom looks like duplicated channels, so the agent dedupes the final list and never finds that the template's channel list is mutated in place.",
+          "difference": "After one request with `slack_enabled`, a later request for the same event type with no preferences still returns `slack` in its channels, because the shared template list was mutated. The reference returns only the base channels.",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    channels = _sort_channels_by_weight(channels)",
+              "    channels = _sort_channels_by_weight(list(dict.fromkeys(channels)))"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..3b05b8d 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -115,7 +115,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n         return None\n \n     channels = _merge_extra_channels(channels, extra_channels)\n-    channels = _sort_channels_by_weight(channels)\n+    channels = _sort_channels_by_weight(list(dict.fromkeys(channels)))\n \n     notification_id = _generate_notification_id(event_type, recipient)\n     metadata = _build_metadata(event_type, recipient, event_data, priority)\n",
+          "hidden": "fail",
+          "hidden_tail": "E       assert ['email', 'slack'] == ['email']\nE         \nE         Left contains one more item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:31: AssertionError\n________________ TestNotificationBuilder.test_routing_unchanged ________________\n\nself = <test_notifications.TestNotificationBuilder object at 0x10711e240>\n\n    def test_routing_unchanged(self):\n        orig = list(_ROUTING[\"task.assigned\"][\"channels\"])\n        build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"])\n>       assert _ROUTING[\"task.assigned\"][\"channels\"] == orig, f\"Routing mutated: {_ROUTING['task.assigned']['channels']}\"\nE       AssertionError: Routing mutated: ['email', 'slack', 'push']\nE       assert ['email', 'slack', 'push'] == ['email']\nE         \nE         Left contains 2 more items, first extra item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:36: AssertionError\n=========================== short test summary info ============================\nFAILED test_notifications.py::TestNotificationBuilder::test_independent_notifications\nFAILED test_notifications.py::TestNotificationBuilder::test_routing_unchanged\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m2",
+          "title": "Set-union merge gives unstable order",
+          "plausible": "The agent replaces the in-place `+=` with a set union to get a fresh, duplicate-free list.",
+          "difference": "With `slack_enabled` and `push_enabled` both set, slack and push have equal weight 2. Their final order then depends on set iteration order, so it can differ from the reference's deterministic slack-then-push order.",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    new_channels = [ch for ch in extra_channels if ch not in channels]\n    channels += new_channels\n    return channels",
+              "    return list(set(channels) | set(extra_channels))"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..b0d1408 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -89,9 +89,7 @@ def _merge_extra_channels(channels, extra_channels):\n     \"\"\"\n     if not extra_channels:\n         return channels\n-    new_channels = [ch for ch in extra_channels if ch not in channels]\n-    channels += new_channels\n-    return channels\n+    return list(set(channels) | set(extra_channels))\n \n \n def build_notification(event_type, recipient, event_data, extra_channels=None):\n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 2,
+            "spec": "implied",
+            "basis": "The description says that \"channels accumulate and sort order changes unexpectedly\" across repeated requests, so the channel list for the same input should be stable. It never states the exact order for equal-weight channels. The test therefore asserts only that the output is identical across hash seeds, not a specific order.",
+            "code": "import sys, os, json, subprocess\n\nROOT = os.path.dirname(os.path.abspath(__file__))\n\nSCRIPT = r\"\"\"\nimport json\nfrom services.notification_builder import build_notification\nout = []\nfor _ in range(2):\n    n = build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"])\n    out.append(n[\"channels\"])\nprint(json.dumps(out))\n\"\"\"\n\n\ndef _run(seed):\n    env = dict(os.environ)\n    env[\"PYTHONHASHSEED\"] = str(seed)\n    env[\"PYTHONPATH\"] = ROOT + os.pathsep + env.get(\"PYTHONPATH\", \"\")\n    res = subprocess.run(\n        [sys.executable, \"-c\", SCRIPT],\n        cwd=ROOT, env=env, capture_output=True, text=True, timeout=60,\n    )\n    assert res.returncode == 0, res.stderr\n    return json.loads(res.stdout.strip().splitlines()[-1])\n\n\ndef test_channel_order_independent_of_hash_seed():\n    results = set()\n    for seed in range(12):\n        out = _run(seed)\n        # repeated requests within a process give the same result\n        assert out[0] == out[1]\n        assert len(out[0]) == len(set(out[0]))\n        assert {\"email\", \"slack\", \"push\"} <= set(out[0])\n        results.add(tuple(out[0]))\n    assert len(results) == 1, f\"Channel order varies across runs: {results}\"\n\n\ndef test_no_accumulation_across_requests():\n    sys.path.insert(0, ROOT)\n    from services.notification_builder import build_notification\n    build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"])\n    n = build_notification(\"task.assigned\", \"b@ex.com\", {})\n    assert n[\"channels\"] == [\"email\"]",
+            "on_baseline": "fail",
+            "mutant_tail": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n_________________ test_channel_order_independent_of_hash_seed __________________\n\n    def test_channel_order_independent_of_hash_seed():\n        results = set()\n        for seed in range(12):\n            out = _run(seed)\n            # repeated requests within a process give the same result\n            assert out[0] == out[1]\n            assert len(out[0]) == len(set(out[0]))\n            assert {\"email\", \"slack\", \"push\"} <= set(out[0])\n            results.add(tuple(out[0]))\n>       assert len(results) == 1, f\"Channel order varies across runs: {results}\"\nE       AssertionError: Channel order varies across runs: {('email', 'slack', 'push'), ('email', 'push', 'slack')}\nE       assert 2 == 1\nE        +  where 2 = len({('email', 'push', 'slack'), ('email', 'slack', 'push')})\n\ntest_gst_killer.py:37: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::test_channel_order_independent_of_hash_seed - Asse...\n1 failed, 1 passed in 0.19s"
+          }
+        },
+        {
+          "id": "m3",
+          "title": "Copy only in plan-limit branch",
+          "plausible": "The agent finds the aliasing in the resolver's `_apply_plan_limits` and copies on the early-return branch, missing the `max_channels is None` branch that the default enterprise plan takes.",
+          "difference": "`resolve_channels` defaults to the enterprise plan, which has `max_channels` of None. That path still returns the shared template list, so channels still accumulate across requests (for example `slack` and `push` leaking into later `task.assigned` notifications).",
+          "edits": [
+            [
+              "services/channel_resolver.py",
+              "    if max_ch is None:\n        return channels\n    if len(channels) <= max_ch:\n        return channels\n    return channels[:max_ch]",
+              "    if max_ch is None:\n        return channels\n    if len(channels) <= max_ch:\n        return list(channels)\n    return channels[:max_ch]"
+            ]
+          ],
+          "diff": "diff --git a/services/channel_resolver.py b/services/channel_resolver.py\nindex 76e3f61..7ac26ab 100644\n--- a/services/channel_resolver.py\n+++ b/services/channel_resolver.py\n@@ -31,7 +31,7 @@ def _apply_plan_limits(channels, plan_tier):\n     if max_ch is None:\n         return channels\n     if len(channels) <= max_ch:\n-        return channels\n+        return list(channels)\n     return channels[:max_ch]\n \n \n",
+          "hidden": "fail",
+          "hidden_tail": "E       assert ['email', 'slack'] == ['email']\nE         \nE         Left contains one more item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:31: AssertionError\n________________ TestNotificationBuilder.test_routing_unchanged ________________\n\nself = <test_notifications.TestNotificationBuilder object at 0x1097d9fd0>\n\n    def test_routing_unchanged(self):\n        orig = list(_ROUTING[\"task.assigned\"][\"channels\"])\n        build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"])\n>       assert _ROUTING[\"task.assigned\"][\"channels\"] == orig, f\"Routing mutated: {_ROUTING['task.assigned']['channels']}\"\nE       AssertionError: Routing mutated: ['email', 'slack', 'push']\nE       assert ['email', 'slack', 'push'] == ['email']\nE         \nE         Left contains 2 more items, first extra item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:36: AssertionError\n=========================== short test summary info ============================\nFAILED test_notifications.py::TestNotificationBuilder::test_independent_notifications\nFAILED test_notifications.py::TestNotificationBuilder::test_routing_unchanged\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m4",
+          "title": "Copy list and drop sorting",
+          "plausible": "The agent copies the base list, then treats the changing sort order as a second bug and removes the weight sort.",
+          "difference": "For `task.urgent` with `slack_enabled`, the reference returns [email, slack, sms] (sorted by weight). This version returns [email, sms, slack] (insertion order).",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    channels = resolve_channels(event_type)",
+              "    channels = list(resolve_channels(event_type))"
+            ],
+            [
+              "services/notification_builder.py",
+              "    channels = _sort_channels_by_weight(channels)",
+              "    channels = list(channels)"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..1dcb50b 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -108,14 +108,14 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     -------\n     dict or None\n     \"\"\"\n-    channels = resolve_channels(event_type)\n+    channels = list(resolve_channels(event_type))\n     priority = resolve_priority(event_type)\n \n     if channels is None:\n         return None\n \n     channels = _merge_extra_channels(channels, extra_channels)\n-    channels = _sort_channels_by_weight(channels)\n+    channels = list(channels)\n \n     notification_id = _generate_notification_id(event_type, recipient)\n     metadata = _build_metadata(event_type, recipient, event_data, priority)\n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description says \"channels accumulate and sort order changes unexpectedly\", which implies channels should come back in a consistent, weight-sorted order on every request. It never states the exact order ([email, slack, sms]). I took that from the claimed difference in the wrong-fix summary, and I am guessing that \"slack_enabled\" means passing extra_channels=[\"slack\"].",
+            "code": "import sys, os, copy\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom services.notification_builder import build_notification\nfrom templates import _ROUTING\n\n\nclass TestSortStable:\n\n    def setup_method(self):\n        self._saved = copy.deepcopy(_ROUTING)\n\n    def teardown_method(self):\n        for k in list(_ROUTING.keys()):\n            _ROUTING[k] = self._saved[k]\n\n    def test_urgent_with_slack_sorted_by_weight_and_repeatable(self):\n        n1 = build_notification(\"task.urgent\", \"a@ex.com\", {}, extra_channels=[\"slack\"])\n        n2 = build_notification(\"task.urgent\", \"b@ex.com\", {}, extra_channels=[\"slack\"])\n        n3 = build_notification(\"task.urgent\", \"c@ex.com\", {}, extra_channels=[\"slack\"])\n        assert n1[\"channels\"] == [\"email\", \"slack\", \"sms\"]\n        assert n2[\"channels\"] == n1[\"channels\"]\n        assert n3[\"channels\"] == n1[\"channels\"]",
+            "on_baseline": "pass",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____ TestSortStable.test_urgent_with_slack_sorted_by_weight_and_repeatable _____\n\nself = <test_gst_killer.TestSortStable object at 0x10b1aacc0>\n\n    def test_urgent_with_slack_sorted_by_weight_and_repeatable(self):\n        n1 = build_notification(\"task.urgent\", \"a@ex.com\", {}, extra_channels=[\"slack\"])\n        n2 = build_notification(\"task.urgent\", \"b@ex.com\", {}, extra_channels=[\"slack\"])\n        n3 = build_notification(\"task.urgent\", \"c@ex.com\", {}, extra_channels=[\"slack\"])\n>       assert n1[\"channels\"] == [\"email\", \"slack\", \"sms\"]\nE       AssertionError: assert ['email', 'sms', 'slack'] == ['email', 'slack', 'sms']\nE         \nE         At index 1 diff: 'sms' != 'slack'\nE         Use -v to get more diff\n\ntest_gst_killer.py:21: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::TestSortStable::test_urgent_with_slack_sorted_by_weight_and_repeatable\n1 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m5",
+          "title": "Stop merging extra channels",
+          "plausible": "Accumulation comes from merging extras, so the agent removes the merge and returns only the template channels.",
+          "difference": "A request with `assignee_preferences: {\"slack_enabled\": true}` no longer gets `slack` in its channels. The reference still adds it.",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    channels = _merge_extra_channels(channels, extra_channels)",
+              "    channels = list(channels)"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..534a4f1 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -114,7 +114,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     if channels is None:\n         return None\n \n-    channels = _merge_extra_channels(channels, extra_channels)\n+    channels = list(channels)\n     channels = _sort_channels_by_weight(channels)\n \n     notification_id = _generate_notification_id(event_type, recipient)\n",
+          "hidden": "fail",
+          "hidden_tail": ".F...                                                                    [100%]\n=================================== FAILURES ===================================\n_________________ TestNotificationBuilder.test_extra_channels __________________\n\nself = <test_notifications.TestNotificationBuilder object at 0x10af9db20>\n\n    def test_extra_channels(self):\n        n = build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\"])\n>       assert \"slack\" in n[\"channels\"]\nE       AssertionError: assert 'slack' in ['email']\n\ntest_notifications.py:25: AssertionError\n=========================== short test summary info ============================\nFAILED test_notifications.py::TestNotificationBuilder::test_extra_channels - ...\n1 failed, 4 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m6",
+          "title": "Copy event_data instead of channels",
+          "plausible": "The agent suspects shared mutable request data and defensively copies `event_data`, leaving the real culprit (the shared channel list) in place.",
+          "difference": "Calling `task.assigned` with `slack_enabled` and then again without preferences still returns `slack` on the second call. The reference returns only `email`.",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    channels = _merge_extra_channels(channels, extra_channels)",
+              "    event_data = dict(event_data)\n    channels = _merge_extra_channels(channels, extra_channels)"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..2816a76 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -114,6 +114,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     if channels is None:\n         return None\n \n+    event_data = dict(event_data)\n     channels = _merge_extra_channels(channels, extra_channels)\n     channels = _sort_channels_by_weight(channels)\n \n",
+          "hidden": "fail",
+          "hidden_tail": "E       assert ['email', 'slack'] == ['email']\nE         \nE         Left contains one more item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:31: AssertionError\n________________ TestNotificationBuilder.test_routing_unchanged ________________\n\nself = <test_notifications.TestNotificationBuilder object at 0x106b4e0c0>\n\n    def test_routing_unchanged(self):\n        orig = list(_ROUTING[\"task.assigned\"][\"channels\"])\n        build_notification(\"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"])\n>       assert _ROUTING[\"task.assigned\"][\"channels\"] == orig, f\"Routing mutated: {_ROUTING['task.assigned']['channels']}\"\nE       AssertionError: Routing mutated: ['email', 'slack', 'push']\nE       assert ['email', 'slack', 'push'] == ['email']\nE         \nE         Left contains 2 more items, first extra item: 'slack'\nE         Use -v to get more diff\n\ntest_notifications.py:36: AssertionError\n=========================== short test summary info ============================\nFAILED test_notifications.py::TestNotificationBuilder::test_independent_notifications\nFAILED test_notifications.py::TestNotificationBuilder::test_routing_unchanged\n2 failed, 3 passed in 0.01s",
+          "killer": {}
+        },
+        {
+          "id": "m7",
+          "title": "Alphabetical tie-break in sort",
+          "plausible": "To make ordering deterministic, the agent adds the channel name as a sort tie-breaker, and copies the list to stop accumulation.",
+          "difference": "With `slack_enabled` and `push_enabled`, both have weight 2. This version orders them push, slack, while the reference keeps insertion order (slack, push).",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "    channels = resolve_channels(event_type)",
+              "    channels = list(resolve_channels(event_type))"
+            ],
+            [
+              "services/notification_builder.py",
+              "    return sorted(channels, key=_weight)",
+              "    return sorted(channels, key=lambda ch: (_weight(ch), ch))"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..4632f12 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -47,7 +47,7 @@ def _sort_channels_by_weight(channels):\n             return 99\n         return entry.get(\"priority_weight\", 50)\n \n-    return sorted(channels, key=_weight)\n+    return sorted(channels, key=lambda ch: (_weight(ch), ch))\n \n \n def _build_metadata(event_type, recipient, event_data, priority):\n@@ -108,7 +108,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     -------\n     dict or None\n     \"\"\"\n-    channels = resolve_channels(event_type)\n+    channels = list(resolve_channels(event_type))\n     priority = resolve_priority(event_type)\n \n     if channels is None:\n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "ambiguous",
+            "basis": "The description only says that \"channels accumulate and sort order changes unexpectedly\" on repeated requests. It does not say how channels with equal weight should be ordered. The test asserts insertion order (slack before push) for the tied channels, which comes from the reference's stable sort rather than from anything the description states. I also did not see the repo, so the tie in weight between slack and push is taken from the wrong-fix description.",
+            "code": "import sys, os, copy\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom services.notification_builder import build_notification\nfrom templates import _ROUTING\n\n\nclass TestTieOrder:\n\n    def setup_method(self):\n        self._saved = copy.deepcopy(_ROUTING)\n\n    def teardown_method(self):\n        for k in list(_ROUTING.keys()):\n            _ROUTING[k] = self._saved[k]\n\n    def test_equal_weight_channels_keep_requested_order(self):\n        n = build_notification(\n            \"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )\n        ch = n[\"channels\"]\n        assert \"slack\" in ch and \"push\" in ch\n        assert ch.index(\"slack\") < ch.index(\"push\"), ch\n\n    def test_repeated_requests_stable(self):\n        first = build_notification(\n            \"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )[\"channels\"]\n        second = build_notification(\n            \"task.assigned\", \"b@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )[\"channels\"]\n        assert first == second\n        assert first.index(\"slack\") < first.index(\"push\")",
+            "on_baseline": "pass",
+            "mutant_tail": "test_gst_killer.py:23: AssertionError\n__________________ TestTieOrder.test_repeated_requests_stable __________________\n\nself = <test_gst_killer.TestTieOrder object at 0x106a71d90>\n\n    def test_repeated_requests_stable(self):\n        first = build_notification(\n            \"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )[\"channels\"]\n        second = build_notification(\n            \"task.assigned\", \"b@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )[\"channels\"]\n        assert first == second\n>       assert first.index(\"slack\") < first.index(\"push\")\nE       AssertionError: assert 2 < 1\nE        +  where 2 = <built-in method index of list object at 0x106a920c0>('slack')\nE        +    where <built-in method index of list object at 0x106a920c0> = ['email', 'push', 'slack'].index\nE        +  and   1 = <built-in method index of list object at 0x106a920c0>('push')\nE        +    where <built-in method index of list object at 0x106a920c0> = ['email', 'push', 'slack'].index\n\ntest_gst_killer.py:33: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::TestTieOrder::test_equal_weight_channels_keep_requested_order\nFAILED test_gst_killer.py::TestTieOrder::test_repeated_requests_stable - Asse...\n2 failed in 0.01s"
+          }
+        },
+        {
+          "id": "m8",
+          "title": "Cap channels by priority default size",
+          "plausible": "The agent copies the list, then also caps the final channel count to the size of the priority's default channel list to prevent channels from growing.",
+          "difference": "For `task.assigned` (normal priority) with both `slack_enabled` and `push_enabled`, the reference returns [email, slack, push]. This version truncates to two channels, [email, slack].",
+          "edits": [
+            [
+              "services/notification_builder.py",
+              "from config import CHANNEL_REGISTRY",
+              "from config import CHANNEL_REGISTRY, CHANNEL_DEFAULTS"
+            ],
+            [
+              "services/notification_builder.py",
+              "    channels = resolve_channels(event_type)",
+              "    channels = list(resolve_channels(event_type))"
+            ],
+            [
+              "services/notification_builder.py",
+              "    channels = _sort_channels_by_weight(channels)",
+              "    channels = _sort_channels_by_weight(channels)\n    channels = channels[: max(len(CHANNEL_DEFAULTS.get(priority, [\"email\"])), 1)]"
+            ]
+          ],
+          "diff": "diff --git a/services/notification_builder.py b/services/notification_builder.py\nindex 36e7eea..c158cd3 100644\n--- a/services/notification_builder.py\n+++ b/services/notification_builder.py\n@@ -4,7 +4,7 @@ import hashlib\n import time\n \n from services.channel_resolver import resolve_channels, resolve_priority\n-from config import CHANNEL_REGISTRY\n+from config import CHANNEL_REGISTRY, CHANNEL_DEFAULTS\n from utils.formatters import format_subject, format_body, truncate\n \n \n@@ -108,7 +108,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n     -------\n     dict or None\n     \"\"\"\n-    channels = resolve_channels(event_type)\n+    channels = list(resolve_channels(event_type))\n     priority = resolve_priority(event_type)\n \n     if channels is None:\n@@ -116,6 +116,7 @@ def build_notification(event_type, recipient, event_data, extra_channels=None):\n \n     channels = _merge_extra_channels(channels, extra_channels)\n     channels = _sort_channels_by_weight(channels)\n+    channels = channels[: max(len(CHANNEL_DEFAULTS.get(priority, [\"email\"])), 1)]\n \n     notification_id = _generate_notification_id(event_type, recipient)\n     metadata = _build_metadata(event_type, recipient, event_data, priority)\n",
+          "hidden": "pass",
+          "hidden_tail": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "killer": {
+            "verified": true,
+            "attempts": 1,
+            "spec": "implied",
+            "basis": "The description only says that repeat requests for the same event type should behave like the first one, with no accumulated or duplicated channels. It never says that requested extra channels must all be kept. A reasonable reader still expects that, because the existing `test_extra_channels` shows extras are added. The wrong fix silently drops the third channel, which this test catches.",
+            "code": "import sys, os, copy\nsys.path.insert(0, os.path.dirname(__file__))\n\nfrom services.notification_builder import build_notification\nfrom templates import _ROUTING\n\n\nclass TestKiller:\n\n    def setup_method(self):\n        self._saved = copy.deepcopy(_ROUTING)\n\n    def teardown_method(self):\n        for k in list(_ROUTING.keys()):\n            _ROUTING[k] = self._saved[k]\n\n    def test_all_extra_channels_kept_and_stable(self):\n        first = build_notification(\n            \"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )\n        second = build_notification(\n            \"task.assigned\", \"b@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )\n        for n in (first, second):\n            assert len(n[\"channels\"]) == 3, n[\"channels\"]\n            assert set(n[\"channels\"]) == {\"email\", \"slack\", \"push\"}\n        assert first[\"channels\"] == second[\"channels\"]",
+            "on_baseline": "pass",
+            "mutant_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______________ TestKiller.test_all_extra_channels_kept_and_stable ______________\n\nself = <test_gst_killer.TestKiller object at 0x10ada5250>\n\n    def test_all_extra_channels_kept_and_stable(self):\n        first = build_notification(\n            \"task.assigned\", \"a@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )\n        second = build_notification(\n            \"task.assigned\", \"b@ex.com\", {}, extra_channels=[\"slack\", \"push\"]\n        )\n        for n in (first, second):\n>           assert len(n[\"channels\"]) == 3, n[\"channels\"]\nE           AssertionError: ['email', 'slack']\nE           assert 2 == 3\nE            +  where 2 = len(['email', 'slack'])\n\ntest_gst_killer.py:25: AssertionError\n=========================== short test summary info ============================\nFAILED test_gst_killer.py::TestKiller::test_all_extra_channels_kept_and_stable\n1 failed in 0.01s"
+          }
+        }
+      ]
+    }
+  ]
+}
